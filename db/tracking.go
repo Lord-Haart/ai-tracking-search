@@ -4,7 +4,10 @@
 package db
 
 import (
+	"database/sql"
 	"time"
+
+	_types "com.cne/ai-tracking-search/types"
 )
 
 const (
@@ -12,11 +15,23 @@ const (
 	values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
-	insertTrackingDetail string = ``
+	insertTrackingDetail string = `insert into tracking_detail(info_id, date, place, details, state, event_id, event_name, event_rule_match, status, create_time, update_time)
+	values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 )
 
-func SaveTrackingToDb(carrierId int, language int, trackingNo string, deliveryTime time.Time, destination string, collectorType int, collectorRealName string, datePoint time.Time) (int64, error) {
-	if result, err := db.Exec(insertTracking, carrierId, language, trackingNo, deliveryTime, destination, collectorType, collectorRealName, datePoint, datePoint, 1 /*status*/); err != nil {
+func SaveTrackingToDb(carrierId int64, language _types.LangId, trackingNo string, deliveryTime time.Time, destination string, collectorType _types.TrackingResultSrc, collectorRealName string, datePoint time.Time, done bool) (int64, error) {
+	deliveryTime_ := sql.NullTime{Time: deliveryTime, Valid: done}
+	destination_ := sql.NullString{String: destination, Valid: destination != ""}
+	if result, err := db.Exec(insertTracking, carrierId, int(language), trackingNo, deliveryTime_, destination_, int(collectorType), collectorRealName, datePoint, datePoint, 1 /*status*/); err != nil {
+		return -1, err
+	} else {
+		lastRowId, _ := result.LastInsertId()
+		return lastRowId, nil
+	}
+}
+
+func SaveTrackingDetailToDb(infoId int64, date time.Time, place string, details string, state int, datePoint time.Time) (int64, error) {
+	if result, err := db.Exec(insertTrackingDetail, infoId, date, place, details, state, sql.NullInt64{}, sql.NullString{}, sql.NullInt16{}, 1 /*status*/, datePoint, datePoint); err != nil {
 		return -1, err
 	} else {
 		lastRowId, _ := result.LastInsertId()

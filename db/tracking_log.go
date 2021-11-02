@@ -5,6 +5,8 @@ package db
 
 import (
 	"time"
+
+	_types "com.cne/ai-tracking-search/types"
 )
 
 const (
@@ -14,9 +16,9 @@ const (
 	`
 )
 
-func SaveTrackingLogToDb(carrierId int64, trackingNo string, matchType int, countryId int, timing int, host string, resultStatus int, statisticsDate time.Time, collectorType int,
+func SaveTrackingLogToDb(carrierId int64, trackingNo string, matchType int, countryId int, timing int, host string, resultStatus int, statisticsDate time.Time, collectorType _types.TrackingResultSrc,
 	datePoint time.Time, creator string, requestTime, crawlerStartTime, crawlerEndTime time.Time, crawlerRespBody, resultNote string) (int64, error) {
-	if result, err := db.Exec(insertTrackingLog, carrierId, trackingNo, matchType, countryId, timing, host, resultStatus, statisticsDate, collectorType, 1 /*status*/, datePoint, creator, datePoint, creator,
+	if result, err := db.Exec(insertTrackingLog, carrierId, trackingNo, matchType, countryId, timing, host, resultStatus, statisticsDate, int(collectorType), 1 /*status*/, datePoint, creator, datePoint, creator,
 		requestTime, crawlerStartTime, crawlerEndTime, crawlerRespBody, resultNote); err != nil {
 		return -1, err
 	} else {

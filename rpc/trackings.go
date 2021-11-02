@@ -160,11 +160,11 @@ func Trackings(ctx *gin.Context) {
 				panic(err)
 			}
 
-			// go func() {
-			// 	if err := saveResultToDb(trackingSearchList); err != nil {
-			// 		log.Printf("[WARN] Cannot save result to db. cause=%s", err)
-			// 	}
-			// }()
+			go func() {
+				if err := saveResultToDb(trackingSearchList); err != nil {
+					log.Printf("[WARN] Cannot save result to db. cause=%s", err)
+				}
+			}()
 
 			trackingSearchList2 = append(trackingSearchList2, trackingSearchList...)
 		}
@@ -427,8 +427,18 @@ func saveResultToDb(trackingSearchList []*trackingSearch) error {
 			if carrierPo, err := _db.QueryCarrierByCode(ts.CarrierCode); err != nil {
 				return err
 			} else {
-				if _, err := _db.SaveTrackingResultToDb(carrierPo.Id, ts.Language, ts.TrackingNo, string(eventsJson), now, ts.Done); err != nil {
+				// if _, err := _db.SaveTrackingResultToDb(carrierPo.Id, ts.Language, ts.TrackingNo, string(eventsJson), now, ts.Done); err != nil {
+				// 	return err
+				// }
+				fmt.Printf("%s\n", eventsJson)
+				if trackingId, err := _db.SaveTrackingToDb(carrierPo.Id, ts.Language, ts.TrackingNo, ts.DoneTime, "", ts.Src, ts.CrawlerName, now, ts.Done); err != nil {
 					return err
+				} else {
+					for _, event := range ts.Events {
+						if _, err := _db.SaveTrackingDetailToDb(trackingId, event.Date, event.Place, event.Details, event.State, now); err != nil {
+							return err
+						}
+					}
 				}
 			}
 		}
@@ -469,7 +479,7 @@ func saveLogToDb(trackingSearchList []*trackingSearch) error {
 			} else {
 				timing = ts.CrawlerEndTime.Sub(ts.CrawlerStartTime).Milliseconds()
 			}
-			if _, err := _db.SaveTrackingLogToDb(carrierPo.Id, ts.TrackingNo, matchType, carrierPo.CountryId, int(timing), ts.Host, resultStatus, now, int(ts.Src), now, operator,
+			if _, err := _db.SaveTrackingLogToDb(carrierPo.Id, ts.TrackingNo, matchType, carrierPo.CountryId, int(timing), ts.Host, resultStatus, now, ts.Src, now, operator,
 				ts.ReqTime, ts.CrawlerStartTime, ts.CrawlerEndTime, ts.RawText, resultNote); err != nil {
 				return err
 			}
