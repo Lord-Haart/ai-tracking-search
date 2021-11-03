@@ -29,10 +29,10 @@ const (
 	AppName    string = "tracking-search" // 表示应用程序名。
 	AppVersion string = "0.1.0"           // 表示应用程序版本。
 
-	DefaultConfigFile    string = AppName + ".json" // 表示默认的配置文件名。
-	DefaultListenAddress string = ":8001"           // 表示默认的监听地址。
-	DefaultDebug         bool   = false             // 表示默认是否开启Debug模式。
-	DefaultTimeout       int    = 30                // 表示默认的请求超时秒数。
+	DefaultConfigFile    string = "./" + AppName + ".json" // 表示默认的配置文件名。
+	DefaultListenAddress string = ":8001"                  // 表示默认的监听地址。
+	DefaultDebug         bool   = false                    // 表示默认是否开启Debug模式。
+	DefaultTimeout       int    = 30                       // 表示默认的请求超时秒数。
 
 	DefaultRedisHost     string = "localhost" // 表示默认的Redis主机地址。
 	DefaultRedisPort     int    = 6379        // 表示默认的Redis端口号。
