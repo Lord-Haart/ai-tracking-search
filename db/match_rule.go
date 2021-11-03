@@ -26,7 +26,7 @@ func (m *MatchRulePo) Match(detail string) bool {
 }
 
 const (
-	selectMatchRuleByCarrierCode = `select ter.id, ted.target_type, ter.content, tes1.name_en from tracking_event_rule ter
+	selectMatchRuleByCarrierCode = `select ter.id, ted.target_type, ter.content, tes2.name_en from tracking_event_rule ter
 	join tracking_event_rule_detail ted on ted.event_rule_id = ter.id
 	join carrier_info ci on ci.id = ted.carrier_id
 	join tracking_event_info tei on tei.id = ter.event_id

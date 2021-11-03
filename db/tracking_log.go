@@ -4,6 +4,7 @@
 package db
 
 import (
+	"database/sql"
 	"time"
 
 	_types "com.cne/ai-tracking-search/types"
@@ -18,8 +19,10 @@ const (
 
 func SaveTrackingLogToDb(carrierId int64, trackingNo string, matchType int, countryId int, timing int, host string, resultStatus int, statisticsDate time.Time, collectorType _types.TrackingResultSrc,
 	datePoint time.Time, creator string, requestTime, crawlerStartTime, crawlerEndTime time.Time, crawlerRespBody, resultNote string) (int64, error) {
+	crawlerStartTime_ := sql.NullTime{Time: crawlerStartTime, Valid: !crawlerStartTime.IsZero()}
+	crawlerEndTime_ := sql.NullTime{Time: crawlerEndTime, Valid: !crawlerEndTime.IsZero()}
 	if result, err := db.Exec(insertTrackingLog, carrierId, trackingNo, matchType, countryId, timing, host, resultStatus, statisticsDate, int(collectorType), 1 /*status*/, datePoint, creator, datePoint, creator,
-		requestTime, crawlerStartTime, crawlerEndTime, crawlerRespBody, resultNote); err != nil {
+		requestTime, crawlerStartTime_, crawlerEndTime_, crawlerRespBody, resultNote); err != nil {
 		return -1, err
 	} else {
 		lastRowId, _ := result.LastInsertId()

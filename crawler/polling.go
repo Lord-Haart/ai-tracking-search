@@ -49,17 +49,21 @@ func init() {
 
 // 启动轮询。
 func Poll() {
+	chs := make([]chan int, 10)
 	for {
 		// TODO: 并发的轮询协程数应当在配置文件中配置。
 		for i := 0; i < 10; i++ {
-			go pollOne()
+			chs[i] = make(chan int)
+			go pollOne(chs[i])
 		}
 
-		time.Sleep(1 * time.Second)
+		for i := 0; i < 10; i++ {
+			<-chs[i]
+		}
 	}
 }
 
-func pollOne() {
+func pollOne(ch chan int) {
 	// 依次从不同的优先级队列中获取任务。
 	p, key := nextKey()
 
@@ -67,13 +71,13 @@ func pollOne() {
 		seqNo := key[len(TrackingSearchKeyPrefix)+1:]
 
 		if os, err := _cache.Get(key, "reqTime", "carrierCode", "language", "trackingNo"); err != nil {
-			panic(fmt.Errorf("cannot get tracking-search(key=%s) from cache: %w", key, err))
+			log.Printf("[ERROR] Cannot get tracking-search(key=%s) from cache: %s\n", key, err)
 		} else {
 			reqTime := _utils.AsTime(os[0])
 			carrierCode := _utils.AsString(os[1])
 			var language _types.LangId
 			if v, err := _types.ParseLangId(_utils.AsString(os[2])); err != nil {
-				panic(err)
+				log.Printf("[WARN] Illegal language: %v\n", os[2])
 			} else {
 				language = v
 			}
@@ -81,9 +85,9 @@ func pollOne() {
 
 			// 查询对应的爬虫和参数。
 			if crawlerInfo, err := _db.QueryCrawlerInfoByCarrierCode(carrierCode, reqTime); err != nil {
-				panic(err)
+				log.Printf("[ERROR] %s\n", err)
 			} else if crawlerInfo == nil {
-				panic(fmt.Errorf("cannot find suitable crawler for carrier[%s] at %v", carrierCode, reqTime))
+				log.Printf("[WARN] Cannot find suitable crawler for carrier[%s] at %s\n", carrierCode, reqTime)
 			} else {
 				_cache.Set(key, map[string]interface{}{"status": 0})
 
@@ -93,16 +97,16 @@ func pollOne() {
 					// 调用python爬虫。
 					cResult, cErr = callCrawlerByPython(crawlerInfo, seqNo, carrierCode, language, trackingNo)
 					if cErr != nil {
-						fmt.Printf("Err: %v\n", cErr)
+						log.Printf("[WARN]: Cannot call python crawler %s\n", cErr)
 					}
 				} else if crawlerInfo.Type == ctGo {
 					// 调用Go爬虫。
 					cResult, cErr = callCrawlerByGolang(crawlerInfo, seqNo, carrierCode, language, trackingNo)
 					if cErr != nil {
-						fmt.Printf("Err: %v\n", cErr)
+						log.Printf("[WARN]: Cannot call golang crawler %s\n", cErr)
 					}
 				} else {
-					panic(fmt.Errorf("unsupported crawler type: %s", crawlerInfo.Type))
+					log.Printf("[WARN] Unsupported crawler type: %s\n", crawlerInfo.Type)
 				}
 
 				if cResult != nil {
@@ -111,6 +115,8 @@ func pollOne() {
 			}
 		}
 	}
+
+	ch <- 1
 }
 
 func nextKey() (_types.Priority, string) {

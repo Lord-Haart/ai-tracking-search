@@ -33,7 +33,7 @@ const (
 	trSuccess trackingsRspCode = "S" // 表示成功的查询。
 	trError   trackingsRspCode = "E" // 表示出现错误的查询。
 
-	maxPullCount = 18 // 轮询缓存的最大次数。
+	maxPullCount = 40 // 轮询缓存的最大次数。
 )
 
 // 表示查询请求。
@@ -75,6 +75,7 @@ type trackingSearch struct {
 	Err              string                   // 爬虫发生错误时返回的的消息。
 	RawText          string                   // 爬取发生错误时返回的原始文本。
 	DoneTime         time.Time                // 妥投时间。
+	DonePlace        string                   // 妥投的地点。
 	Done             bool                     // 是否已经妥投。
 }
 
@@ -103,7 +104,9 @@ type trackingOrderRsp struct {
 	SeqNo        string              `json:"seqNo"`        // 查询流水号。
 	State        int                 `json:"state"`        // 查询状态，即爬虫是否返回了能够解析的查询结果（即使查询结果为空）。
 	Message      string              `json:"message"`      // 运单状态对应的文本。
+	Delivered    int                 `json:"delivered"`    // 是否已妥投。1表示已妥投，0表示未妥投。
 	DeliveryDate string              `json:"deliveryDate"` // 妥投的时间。
+	Destination  string              `json:"destination"`  // 妥投的目的地。
 	Src          string              `json:"src"`          // 响应的数据来源。
 	Events       []*trackingEventRsp `json:"events"`       // 运单包含的事件。
 }
@@ -163,7 +166,7 @@ func Trackings(ctx *gin.Context) {
 
 			go func() {
 				if err := saveResultToDb(trackingSearchList); err != nil {
-					log.Printf("[WARN] Cannot save result to db. cause=%s", err)
+					log.Printf("[WARN] Cannot save result to db. cause=%s\n", err)
 				}
 			}()
 
@@ -183,7 +186,11 @@ func loadFromDb(trackingSearchList []*trackingSearch) error {
 		} else if tr != nil {
 			ts.Src = _types.SrcDB
 			ts.UpdateTime = tr.UpdateTime
-			json.Unmarshal([]byte(tr.EventsJson), &ts.Events)
+			if tr.EventsJson != "" {
+				json.Unmarshal([]byte(tr.EventsJson), &ts.Events)
+			} else {
+				ts.Events = []*trackingEvent{}
+			}
 			ts.CrawlerCode = _crawler.CcSuccess2 // 如果跟踪记录来自于数据库，那么爬虫返回码字段固定为成功，因为该记录必然来自于之前曾经成功的查询。
 			ts.Done = tr.Done
 			trackingSearchList[i] = ts
@@ -209,7 +216,8 @@ func pushSearchToQueue(priority _types.Priority, trackingSearchList []*trackingS
 		}
 	}
 
-	avaiableUpdateTime := time.Now().Add(time.Hour * -2) // 有效更新时间。
+	avaiableUpdateTime := time.Now().Add(time.Hour * -2)        // 有效更新时间。
+	avaiableUpdateTimeOfEmpty := time.Now().Add(time.Hour * -8) // 空单号有效更新时间。
 
 	for _, ts := range trackingSearchList {
 		// 数据库中存在跟踪记录，那么检查其它条件，判断是否可以直接使用数据库记录，而不再调用爬虫查询。
@@ -217,8 +225,11 @@ func pushSearchToQueue(priority _types.Priority, trackingSearchList []*trackingS
 			if ts.Done {
 				// 已完成，这种查询对象不再需要执行。
 				continue
-			} else if priority == _types.PriorityHighest || ts.UpdateTime.After(avaiableUpdateTime) {
-				// 未完成，但是当前优先级是最高，或者更新时间晚于有效更新时间（即数据比较新），这种查询对象也不再需要执行。
+			} else if priority != _types.PriorityHighest && (ts.UpdateTime.After(avaiableUpdateTime) || (len(ts.Events) == 0 && ts.UpdateTime.After(avaiableUpdateTimeOfEmpty))) {
+				// 未完成，但是当前优先级不是最高，并且满足以下两个条件之一：
+				// 1. 更新时间晚于有效更新时间（即数据比较新）;
+				// 2. 更新时间晚于有效更新时间2，并且之前查询结果是空单号;
+				// 这种查询对象也不再需要执行。
 				continue
 			}
 		}
@@ -254,7 +265,7 @@ func pullSearchFromCache(priority _types.Priority, keys []string) ([]*trackingSe
 		pc := 0
 		for _, key := range keys {
 			if os, err := _cache.Get(key, "reqTime", "carrierCode", "language", "trackingNo", "status", "crawlerResult", "crawlerName", "crawlerStartTime", "crawlerEndTime"); err != nil {
-				return nil, fmt.Errorf("[WARN] Cannot get tracking-search(key=%s) from cache. cause=%w", key, err)
+				return nil, fmt.Errorf("cannot get tracking-search(key=%s) from cache. cause=%w", key, err)
 			} else {
 				// 爬虫执行状态，该值由爬虫调度程序写入，和数据库中的`status`字段无关。
 				status := _utils.AsInt(os[4], -1)
@@ -271,8 +282,7 @@ func pullSearchFromCache(priority _types.Priority, keys []string) ([]*trackingSe
 				trackingResult := _crawler.TrackingResult{Code: _crawler.CcTimeout}
 				events := make([]*trackingEvent, 0)
 				if crawlerRspJson == "" {
-					log.Printf("[WARN] Cannot parse empty crawler result json")
-					continue
+					log.Printf("[WARN] Cannot parse empty crawler result json\n")
 				} else {
 					crawlerRspJsonBytes := []byte(crawlerRspJson)
 					if err := json.Unmarshal(crawlerRspJsonBytes, &trackingResult); err != nil {
@@ -282,16 +292,12 @@ func pullSearchFromCache(priority _types.Priority, keys []string) ([]*trackingSe
 						// 如果反序列化的批量跟踪结果对象包含的运单记录超过1个，也报错。
 						crawlerRsp := _crawler.ResponseWrapper{}
 						if err := json.Unmarshal(crawlerRspJsonBytes, &crawlerRsp); err != nil {
-							log.Printf("[WARN] Cannot parse crawler result json: %v. cause=%v", crawlerRspJson, err)
-							continue
+							log.Printf("[WARN] Cannot parse crawler result json: %v. cause=%s\n", crawlerRspJson, err)
+						} else if len(crawlerRsp.Items) != 1 {
+							log.Printf("[WARN] Length of crawler result should be just 1, but %#v\n", crawlerRsp)
+						} else {
+							trackingResult = crawlerRsp.Items[0]
 						}
-
-						if len(crawlerRsp.Items) != 1 {
-							log.Printf("[WARN] Length of crawler result should be just 1, but %#v", crawlerRsp)
-							continue
-						}
-
-						trackingResult = crawlerRsp.Items[0]
 					}
 
 					// 将爬虫的事件列表映射为待匹配的事件。
@@ -398,10 +404,11 @@ func matchEvents(rules []*_db.MatchRulePo, ts *trackingSearch) {
 		}
 		ts.Events[i] = evt
 
-		// 如果某个事件匹配到了已妥投，那么设置整个查询对象的状态为已妥投，并设置妥投时间。
+		// 如果某个事件匹配到了已妥投，那么设置整个查询对象的状态为已妥投，并设置妥投时间和妥投地点。
 		if delivered {
 			ts.Done = true
 			ts.DoneTime = evt.Date
+			ts.DonePlace = evt.Place
 		}
 	}
 }
@@ -422,23 +429,29 @@ func matchRuleCodeToState(code string) (int, bool) {
 func saveResultToDb(trackingSearchList []*trackingSearch) error {
 	now := time.Now()
 	for _, ts := range trackingSearchList {
-		if eventsJson, err := json.Marshal(ts.Events); err != nil {
-			panic(err)
+		var eventsJson string
+		if ts.Events == nil || len(ts.Events) == 0 {
+			eventsJson = ""
 		} else {
-			if carrierPo, err := _db.QueryCarrierByCode(ts.CarrierCode); err != nil {
+			if eventsJsonBytes, err := json.Marshal(ts.Events); err != nil {
+				panic(err)
+			} else {
+				eventsJson = string(eventsJsonBytes)
+			}
+		}
+
+		if carrierPo, err := _db.QueryCarrierByCode(ts.CarrierCode); err != nil {
+			return err
+		} else {
+			if _, err := _db.SaveTrackingResultToDb(carrierPo.Id, ts.Language, ts.TrackingNo, eventsJson, now, ts.Done); err != nil {
+				return err
+			}
+			if trackingId, err := _db.SaveTrackingToDb(carrierPo.Id, ts.Language, ts.TrackingNo, ts.DoneTime, ts.DonePlace, ts.Src, ts.CrawlerName, now, ts.Done); err != nil {
 				return err
 			} else {
-				// if _, err := _db.SaveTrackingResultToDb(carrierPo.Id, ts.Language, ts.TrackingNo, string(eventsJson), now, ts.Done); err != nil {
-				// 	return err
-				// }
-				fmt.Printf("%s\n", eventsJson)
-				if trackingId, err := _db.SaveTrackingToDb(carrierPo.Id, ts.Language, ts.TrackingNo, ts.DoneTime, "", ts.Src, ts.CrawlerName, now, ts.Done); err != nil {
-					return err
-				} else {
-					for _, event := range ts.Events {
-						if _, err := _db.SaveTrackingDetailToDb(trackingId, event.Date, event.Place, event.Details, event.State, now); err != nil {
-							return err
-						}
+				for _, event := range ts.Events {
+					if _, err := _db.SaveTrackingDetailToDb(trackingId, event.Date, event.Place, event.Details, event.State, now); err != nil {
+						return err
 					}
 				}
 			}
@@ -514,7 +527,7 @@ func buildResult(orders []*trackingOrderReq, r1, r2 []*trackingSearch) *tracking
 
 	go func() {
 		if err := saveLogToDb(logList); err != nil {
-			fmt.Printf("[WARN] Cannot save log to db. cause=%s", err)
+			fmt.Printf("[WARN] Cannot save log to db. cause=%s\n", err)
 		}
 	}()
 
@@ -558,13 +571,17 @@ func buildTrackingOrderResult(trackingSearch *trackingSearch) *trackingOrderRsp 
 		SeqNo:        trackingSearch.SeqNo,
 		State:        1, // 表示此结果来自于数据库或者爬虫爬取的有效网页内容。
 		Message:      "",
+		Delivered:    0,
 		DeliveryDate: "",
+		Destination:  "",
 		Src:          trackingSearch.Src.String(),
 		Events:       events,
 	}
 
 	if trackingSearch.Done {
+		result.Delivered = 1
 		result.DeliveryDate = _utils.FormatTime(trackingSearch.DoneTime)
+		result.Destination = trackingSearch.DonePlace
 	}
 
 	if !_crawler.IsSuccess(trackingSearch.CrawlerCode) {
@@ -585,7 +602,9 @@ func buildEmptyTrackingOrderResult(trackingNo string) *trackingOrderRsp {
 		SeqNo:        "",
 		State:        0, // 表示此结果是凭空构造的。
 		Message:      "Timeout",
+		Delivered:    0,
 		DeliveryDate: "",
+		Destination:  "",
 		Events:       []*trackingEventRsp{},
 	}
 }
