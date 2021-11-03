@@ -30,9 +30,6 @@ const (
 	TrackingSearchKeyPrefix string = "TRACKING_SEARCH" // 缓存中的查询记录的Key的前缀。
 	TrackingQueueKey        string = "TRACKING_QUEUE"  // 查询记录队列Key。
 
-	trSuccess trackingsRspCode = "S" // 表示成功的查询。
-	trError   trackingsRspCode = "E" // 表示出现错误的查询。
-
 	maxPullCount = 40 // 轮询缓存的最大次数。
 )
 
@@ -89,14 +86,9 @@ type trackingEvent struct {
 
 // 表示查询响应。
 type trackingsRsp struct {
-	Code    trackingsRspCode    `json:"code"`    // 表示查询状态的代码，如果该字段是`trError`，那么`Data`字段不可用。
-	ErrorId int                 `json:"errorId"` // 表示具体错误描述的编码。
-	Message string              `json:"message"` // 查询状态代码对应的文本。
-	Data    []*trackingOrderRsp `json:"data"`    // 每个运单对应的查询结果。
+	commonRsp
+	Data []*trackingOrderRsp `json:"data"` // 每个运单对应的查询结果。
 }
-
-// 响应结果代码。
-type trackingsRspCode string
 
 // 表示查询响应中的一条运单。
 type trackingOrderRsp struct {
@@ -531,12 +523,12 @@ func buildResult(orders []*trackingOrderReq, r1, r2 []*trackingSearch) *tracking
 		}
 	}()
 
-	return &trackingsRsp{
-		Code:    trSuccess,
-		Message: "success",
-		ErrorId: 0,
-		Data:    data,
-	}
+	result := trackingsRsp{Data: data}
+	result.Code = rSuccess
+	result.Message = "success"
+	result.ErrorId = 0
+
+	return &result
 }
 
 // 从查询对象集合中寻找运单号匹配的的查询对象。

@@ -9,6 +9,17 @@ import (
 	"strings"
 )
 
+// 运输商类别。
+type CarrierType int
+
+const (
+	CtEMS           CarrierType = 1 // 全球邮政。
+	CtUnion         CarrierType = 2 // 全球联合运输商。
+	CtInternational CarrierType = 3 // 国际运输商。
+	CtCN            CarrierType = 4 // 中国运输商。
+	CtAirline       CarrierType = 5 // 航空公司。
+)
+
 // 爬取的语言类型。
 // 注意：外部接口中包含该类型，并且需要以字符串形式传递，所以需要为该类型提供自定义的`MarshalJSON`和`UnsarshalJSON`
 type LangId int
