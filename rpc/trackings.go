@@ -116,6 +116,7 @@ type trackingEventRsp struct {
 	Details string `json:"details"` // 事件详细。
 }
 
+// 执行运单跟踪状态查询。
 func Trackings(ctx *gin.Context) {
 	req := trackingsReq{Priority: _types.PriorityLow, Language: _types.LangEN}
 	now := time.Now()

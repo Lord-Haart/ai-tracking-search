@@ -30,7 +30,7 @@ const (
 	AppVersion string = "0.1.0"           // 表示应用程序版本。
 
 	DefaultConfigFile    string = AppName + ".json" // 表示默认的配置文件名。
-	DefaultListenAddress string = ":8000"           // 表示默认的监听地址。
+	DefaultListenAddress string = ":8001"           // 表示默认的监听地址。
 	DefaultDebug         bool   = false             // 表示默认是否开启Debug模式。
 	DefaultTimeout       int    = 30                // 表示默认的请求超时秒数。
 
@@ -225,7 +225,7 @@ func doServe() error {
 	router := gin.Default()
 
 	// 路由表
-	router.POST("/carriers", nil)
+	router.POST("/carriers", _rpc.Carriers)
 	router.POST("/trackings", _rpc.Trackings)
 
 	fmt.Printf("Serving @ %s\n", configuration.Listen)
