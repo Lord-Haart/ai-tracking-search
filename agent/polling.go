@@ -49,10 +49,11 @@ func init() {
 
 // 启动轮询。
 func Poll() {
-	chs := make([]chan int, 10)
+	// TODO: 并发的轮询协程数应当在配置文件中配置。
+	n := 30
+	chs := make([]chan int, n)
 	for {
-		// TODO: 并发的轮询协程数应当在配置文件中配置。
-		for i := 0; i < 10; i++ {
+		for i := 0; i < 30; i++ {
 			ch := make(chan int)
 			go func() {
 				defer func() {
@@ -65,7 +66,7 @@ func Poll() {
 			chs[i] = ch
 		}
 
-		for i := 0; i < 10; i++ {
+		for i := 0; i < n; i++ {
 			<-chs[i]
 			close(chs[i])
 		}

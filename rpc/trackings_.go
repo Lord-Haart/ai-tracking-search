@@ -170,9 +170,6 @@ func pullTrackingSearchFromCache(priority _types.Priority, keys []string) ([]*tr
 							State:   0,
 						})
 					}
-
-					fmt.Printf("%s\n", agentRspJson)
-					fmt.Printf("%d\n", trackingResult.Code)
 				}
 
 				language, _ := _types.ParseLangId(_utils.AsString(os[2]))
