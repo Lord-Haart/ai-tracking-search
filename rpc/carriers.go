@@ -28,14 +28,10 @@ func Carriers(ctx *gin.Context) {
 		return
 	}
 
-	if carriers, err := _db.QueryAllCarrier(); err != nil {
-		panic(err)
-	} else {
-		rsp := carriersRsp{Data: carriers}
-		rsp.Code = rSuccess
-		rsp.Message = "success"
-		rsp.ErrorId = 0
+	rsp := carriersRsp{Data: _db.QueryAllCarrier()}
+	rsp.Code = rSuccess
+	rsp.Message = "success"
+	rsp.ErrorId = 0
 
-		ctx.JSON(http.StatusOK, rsp)
-	}
+	ctx.JSON(http.StatusOK, rsp)
 }

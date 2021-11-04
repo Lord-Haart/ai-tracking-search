@@ -53,17 +53,26 @@ func Poll() {
 	for {
 		// TODO: 并发的轮询协程数应当在配置文件中配置。
 		for i := 0; i < 10; i++ {
-			chs[i] = make(chan int)
-			go pollOne(chs[i])
+			ch := make(chan int)
+			go func() {
+				defer func() {
+					_utils.RecoverPanic()
+
+					ch <- 1
+				}()
+				pollOne()
+			}()
+			chs[i] = ch
 		}
 
 		for i := 0; i < 10; i++ {
 			<-chs[i]
+			close(chs[i])
 		}
 	}
 }
 
-func pollOne(ch chan int) {
+func pollOne() {
 	// 依次从不同的优先级队列中获取任务。
 	p, key := nextKey()
 
@@ -84,10 +93,10 @@ func pollOne(ch chan int) {
 			trackingNo := _utils.AsString(os[3])
 
 			// 查询对应的爬虫和参数。
-			if crawlerInfo, err := _db.QueryCrawlerInfoByCarrierCode(carrierCode, reqTime); err != nil {
-				log.Printf("[ERROR] %s\n", err)
-			} else if crawlerInfo == nil {
+			crawlerInfo := _db.QueryCrawlerInfoByCarrierCode(carrierCode, reqTime)
+			if crawlerInfo == nil {
 				log.Printf("[WARN] Cannot find suitable crawler for carrier[%s] at %s\n", carrierCode, reqTime)
+				updateCache(key, "", &crawlerResult{})
 			} else {
 				_cache.Set(key, map[string]interface{}{"status": 0})
 
@@ -115,8 +124,6 @@ func pollOne(ch chan int) {
 			}
 		}
 	}
-
-	ch <- 1
 }
 
 func nextKey() (_types.Priority, string) {

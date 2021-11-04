@@ -2,7 +2,9 @@ package utils
 
 import (
 	"fmt"
+	"log"
 	"path/filepath"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -44,8 +46,10 @@ func ParseRFC1123(s string) time.Time {
 // s 待解析的字符串。
 // 返回解析结果，具有本地时区。
 func ParseTime(s string) time.Time {
-	if r, err := time.ParseInLocation(simpleDateTimeFormatAlt, s, time.Local); err != nil {
-		return time.Time{}
+	if s == "" {
+		return time.Time{}.In(time.Local)
+	} else if r, err := time.ParseInLocation(simpleDateTimeFormatAlt, s, time.Local); err != nil {
+		return time.Time{}.In(time.Local)
 	} else {
 		return r
 	}
@@ -55,7 +59,9 @@ func ParseTime(s string) time.Time {
 // s 待解析的字符串。
 // 返回解析结果，具有UTC时区。
 func ParseUTCTime(s string) time.Time {
-	if r, err := time.ParseInLocation(simpleDateTimeFormatAlt, s, time.UTC); err != nil {
+	if s == "" {
+		return time.Time{}
+	} else if r, err := time.ParseInLocation(simpleDateTimeFormatAlt, s, time.UTC); err != nil {
 		return time.Time{}
 	} else {
 		return r
@@ -63,7 +69,15 @@ func ParseUTCTime(s string) time.Time {
 }
 
 func FormatTime(t time.Time) string {
-	return t.Format(simpleDateTimeFormat)
+	if IsZeroTime(t) {
+		return ""
+	} else {
+		return t.Format(simpleDateTimeFormat)
+	}
+}
+
+func IsZeroTime(t time.Time) bool {
+	return t.In(time.UTC) == time.Time{}
 }
 
 func AsInt(o interface{}, dv int) int {
@@ -128,4 +142,10 @@ func ReverseString(s string) string {
 		runes[from], runes[to] = runes[to], runes[from]
 	}
 	return string(runes)
+}
+
+func RecoverPanic() {
+	if err := recover(); err != nil {
+		log.Printf("[ERROR] %s\n%s\n", err, string(debug.Stack()))
+	}
 }

@@ -46,13 +46,13 @@ const (
 
 // 根据运输商号码和时间从数据库中查询有效的匹配规则。
 // 如果不存在符合条件的记录则返回空切片。
-func QueryMatchRuleByCarrierCode(carrierCode string, datePoint time.Time) ([]*MatchRulePo, error) {
+func QueryMatchRuleByCarrierCode(carrierCode string, datePoint time.Time) []*MatchRulePo {
 	result := make([]*MatchRulePo, 0)
 	if rows, err := db.Query(selectMatchRuleByCarrierCode, carrierCode, datePoint, datePoint); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return result, nil
+			return result
 		} else {
-			return result, err
+			panic(err)
 		}
 	} else {
 		defer rows.Close()
@@ -60,7 +60,7 @@ func QueryMatchRuleByCarrierCode(carrierCode string, datePoint time.Time) ([]*Ma
 		for rows.Next() {
 			matchRule := MatchRulePo{}
 			if err := rows.Scan(&matchRule.Id, &matchRule.TargetType, &matchRule.Content, &matchRule.Code); err != nil {
-				continue
+				panic(err)
 			}
 			if matchRule.Content != "" {
 				matchRule.rp1, _ = regexp.Compile(matchRule.Content)
@@ -68,6 +68,6 @@ func QueryMatchRuleByCarrierCode(carrierCode string, datePoint time.Time) ([]*Ma
 			result = append(result, &matchRule)
 		}
 
-		return result, nil
+		return result
 	}
 }

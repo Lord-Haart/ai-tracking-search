@@ -8,6 +8,7 @@ import (
 	"time"
 
 	_types "com.cne/ai-tracking-search/types"
+	_utils "com.cne/ai-tracking-search/utils"
 )
 
 const (
@@ -18,14 +19,17 @@ const (
 )
 
 func SaveTrackingLogToDb(carrierId int64, trackingNo string, matchType int, countryId int, timing int, host string, resultStatus int, statisticsDate time.Time, collectorType _types.TrackingResultSrc,
-	datePoint time.Time, creator string, requestTime, crawlerStartTime, crawlerEndTime time.Time, crawlerRespBody, resultNote string) (int64, error) {
-	crawlerStartTime_ := sql.NullTime{Time: crawlerStartTime, Valid: !crawlerStartTime.IsZero()}
-	crawlerEndTime_ := sql.NullTime{Time: crawlerEndTime, Valid: !crawlerEndTime.IsZero()}
+	datePoint time.Time, creator string, requestTime, crawlerStartTime, crawlerEndTime time.Time, crawlerRespBody, resultNote string) int64 {
+	crawlerStartTime_ := sql.NullTime{Time: crawlerStartTime, Valid: !_utils.IsZeroTime(crawlerStartTime)}
+	crawlerEndTime_ := sql.NullTime{Time: crawlerEndTime, Valid: !_utils.IsZeroTime(crawlerEndTime)}
 	if result, err := db.Exec(insertTrackingLog, carrierId, trackingNo, matchType, countryId, timing, host, resultStatus, statisticsDate, int(collectorType), 1 /*status*/, datePoint, creator, datePoint, creator,
 		requestTime, crawlerStartTime_, crawlerEndTime_, crawlerRespBody, resultNote); err != nil {
-		return -1, err
+		panic(err)
 	} else {
-		lastRowId, _ := result.LastInsertId()
-		return lastRowId, nil
+		if lastRowId, err := result.LastInsertId(); err != nil {
+			panic(err)
+		} else {
+			return lastRowId
+		}
 	}
 }

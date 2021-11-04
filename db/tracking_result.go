@@ -46,20 +46,20 @@ ADD COLUMN `v2` tinyint(4) NOT NULL DEFAULT 0 COMMENT '是否v2版本的记录' 
 
 // 根据运输商号码，运单号和查询语言从数据库中查询已存在的爬取结果。
 // 如果不存在符合条件的记录则返回nil。
-func QueryTrackingResultByTrackingNo(carrierCode string, language _types.LangId, trackingNo string) (*TrackingResultPo, error) {
+func QueryTrackingResultByTrackingNo(carrierCode string, language _types.LangId, trackingNo string) *TrackingResultPo {
 	result := TrackingResultPo{CarrierCode: carrierCode, TrackingNo: trackingNo, Language: language}
 	if err := db.QueryRow(selectTrackingResultByTrackingNo, carrierCode, trackingNo, language).Scan(&result.EventsJson, &result.UpdateTime, &result.Done); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil
+			return nil
 		} else {
-			return nil, err
+			panic(err)
 		}
 	} else {
-		return &result, nil
+		return &result
 	}
 }
 
-func SaveTrackingResultToDb(carrierId int64, language _types.LangId, trackingNo, eventsJson string, datePoint time.Time, done bool) (int64, error) {
+func SaveTrackingResultToDb(carrierId int64, language _types.LangId, trackingNo, eventsJson string, datePoint time.Time, done bool) int64 {
 	// TODO: 同时保存匹配之前的原始报文。
 	eventsJsonMd5 := fmt.Sprintf("%x", md5.Sum([]byte(eventsJson)))
 	var trackingStatus int
@@ -69,9 +69,12 @@ func SaveTrackingResultToDb(carrierId int64, language _types.LangId, trackingNo,
 		trackingStatus = 1 // 在途。
 	}
 	if result, err := db.Exec(insertTrackingResult, carrierId, language, trackingNo, eventsJson, eventsJsonMd5, 1 /*status*/, datePoint, datePoint, trackingStatus, 1 /*v2*/); err != nil {
-		return -1, err
+		panic(err)
 	} else {
-		lastRowId, _ := result.LastInsertId()
-		return lastRowId, nil
+		if lastRowId, err := result.LastInsertId(); err != nil {
+			panic(err)
+		} else {
+			return lastRowId
+		}
 	}
 }

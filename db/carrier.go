@@ -32,35 +32,35 @@ const (
 	order by id`
 )
 
-func QueryCarrierByCode(carrierCode string) (*CarrierPo, error) {
+func QueryCarrierByCode(carrierCode string) *CarrierPo {
 	// TODO: 使用缓存。
 	result := CarrierPo{}
 	if err := db.QueryRow(selectCarrierInfoByCarrierCode, carrierCode).Scan(&result.Id, &result.CountryId); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil
+			return nil
 		} else {
-			return nil, err
+			panic(err)
 		}
 	} else {
-		return &result, nil
+		return &result
 	}
 }
 
-func QueryAllCarrier() ([]*CarrierPo, error) {
+func QueryAllCarrier() []*CarrierPo {
 	// TODO: 使用缓存。
 	result := make([]*CarrierPo, 0)
 	if rows, err := db.Query(selectAllCarrierInfo); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return result, nil
+			return result
 		} else {
-			return result, err
+			panic(err)
 		}
 	} else {
 		for rows.Next() {
 			carrier := CarrierPo{}
 			var webSiteUrl, tel, email, description sql.NullString
 			if err := rows.Scan(&carrier.Id, &carrier.Code, &carrier.NameCn, &carrier.NameEn, &carrier.CarrierType, &carrier.CountryId, &webSiteUrl, &tel, &email, &description, &carrier.ServiceAvaible); err != nil {
-				return result, err
+				panic(err)
 			} else {
 				carrier.WebSiteUrl = webSiteUrl.String
 				carrier.Tel = tel.String
@@ -70,6 +70,6 @@ func QueryAllCarrier() ([]*CarrierPo, error) {
 			}
 		}
 
-		return result, nil
+		return result
 	}
 }

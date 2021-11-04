@@ -19,22 +19,28 @@ const (
 	values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 )
 
-func SaveTrackingToDb(carrierId int64, language _types.LangId, trackingNo string, deliveryTime time.Time, destination string, collectorType _types.TrackingResultSrc, collectorRealName string, datePoint time.Time, done bool) (int64, error) {
+func SaveTrackingToDb(carrierId int64, language _types.LangId, trackingNo string, deliveryTime time.Time, destination string, collectorType _types.TrackingResultSrc, collectorRealName string, datePoint time.Time, done bool) int64 {
 	deliveryTime_ := sql.NullTime{Time: deliveryTime, Valid: done}
 	destination_ := sql.NullString{String: destination, Valid: destination != ""}
 	if result, err := db.Exec(insertTracking, carrierId, int(language), trackingNo, deliveryTime_, destination_, int(collectorType), collectorRealName, datePoint, datePoint, 1 /*status*/); err != nil {
-		return -1, err
+		panic(err)
 	} else {
-		lastRowId, _ := result.LastInsertId()
-		return lastRowId, nil
+		if lastRowId, err := result.LastInsertId(); err != nil {
+			panic(err)
+		} else {
+			return lastRowId
+		}
 	}
 }
 
-func SaveTrackingDetailToDb(infoId int64, date time.Time, place string, details string, state int, datePoint time.Time) (int64, error) {
+func SaveTrackingDetailToDb(infoId int64, date time.Time, place string, details string, state int, datePoint time.Time) int64 {
 	if result, err := db.Exec(insertTrackingDetail, infoId, date, place, details, state, sql.NullInt64{}, sql.NullString{}, sql.NullInt16{}, 1 /*status*/, datePoint, datePoint); err != nil {
-		return -1, err
+		panic(err)
 	} else {
-		lastRowId, _ := result.LastInsertId()
-		return lastRowId, nil
+		if lastRowId, err := result.LastInsertId(); err != nil {
+			panic(err)
+		} else {
+			return lastRowId
+		}
 	}
 }

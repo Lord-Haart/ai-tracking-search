@@ -47,16 +47,16 @@ where ci.carrier_code = ?
 	`
 )
 
-func QueryCrawlerInfoByCarrierCode(carrierCode string, datePoint time.Time) (*CrawlerInfoPo, error) {
+func QueryCrawlerInfoByCarrierCode(carrierCode string, datePoint time.Time) *CrawlerInfoPo {
 	result := CrawlerInfoPo{}
 	if err := db.QueryRow(selectCrawlerInfoByCarrierCode, carrierCode, datePoint, datePoint).Scan(&result.Id, &result.Name, &result.Url, &result.Type, &result.TargetUrl, &result.ReqHttpMethod, &result.ReqHttpHeaders, &result.ReqHttpBody,
 		&result.Verify, &result.Json, &result.ReqProxy, &result.ReqTimeout, &result.SiteEncrypt, &result.TrackingFieldName, &result.TrackingFieldType, &result.SiteCrawlingName, &result.SiteAnalyzedName); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil
+			return nil
 		} else {
-			return nil, err
+			panic(err)
 		}
 	} else {
-		return &result, nil
+		return &result
 	}
 }
