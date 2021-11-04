@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	_crawler "com.cne/ai-tracking-search/crawler"
+	_agent "com.cne/ai-tracking-search/agent"
 	_types "com.cne/ai-tracking-search/types"
 	_utils "com.cne/ai-tracking-search/utils"
 
@@ -50,24 +50,24 @@ func (s trackingEvents) Less(i, j int) bool { return s[i].Date.After(s[j].Date) 
 
 // 表示针对一个运单的查询，同时包含查询条件和查询结果。
 type trackingSearch struct {
-	Src              _types.TrackingResultSrc // 来源。可以是 DB或者API或者CRAWLER
-	ClientAddr       string                   // 客户端IP地址。
-	ReqTime          time.Time                // 客户端发来请求的时间。
-	SeqNo            string                   // 查询流水号。
-	CarrierCode      string                   // 运输商编号。
-	Language         _types.LangId            // 需要爬取的语言。
-	TrackingNo       string                   // 运单号。
-	UpdateTime       time.Time                // 最后从爬虫更新的业务时间，即最新的事件时间。
-	CrawlerName      string                   // 爬虫的名字。
-	CrawlerStartTime time.Time                // 启动爬虫的时间。
-	CrawlerEndTime   time.Time                // 爬虫返回的时间。
-	Events           trackingEvents           // 事件列表，也就是爬虫返回的有效结果。
-	CrawlerCode      _crawler.CrCode          // 爬虫返回的的状态码。
-	Err              string                   // 爬虫发生错误时返回的的消息。
-	RawText          string                   // 爬取发生错误时返回的原始文本。
-	DoneTime         time.Time                // 妥投时间。
-	DonePlace        string                   // 妥投的地点。
-	Done             bool                     // 是否已经妥投。
+	Src            _types.TrackingResultSrc // 来源。可以是 DB或者API或者CRAWLER
+	ClientAddr     string                   // 客户端IP地址。
+	ReqTime        time.Time                // 客户端发来请求的时间。
+	SeqNo          string                   // 查询流水号。
+	CarrierCode    string                   // 运输商编号。
+	Language       _types.LangId            // 需要爬取的语言。
+	TrackingNo     string                   // 运单号。
+	UpdateTime     time.Time                // 最后从查询代理更新的业务时间，即最新的事件时间。
+	AgentName      string                   // 查询代理的名字。
+	AgentStartTime time.Time                // 启动查询代理的时间。
+	AgentEndTime   time.Time                // 查询代理返回的时间。
+	Events         trackingEvents           // 事件列表，也就是查询代理返回的有效结果。
+	AgentCode      _agent.AgCode            // 查询代理返回的的状态码。
+	Err            string                   // 查询代理发生错误时返回的的消息。
+	AgentRawText   string                   // 爬取发生错误时返回的原始文本。
+	DoneTime       time.Time                // 妥投时间。
+	DonePlace      string                   // 妥投的地点。
+	Done           bool                     // 是否已经妥投。
 }
 
 // 表示跟踪结果的一个事件。
@@ -88,7 +88,7 @@ type trackingsRsp struct {
 type trackingOrderRsp struct {
 	TrackingNo   string              `json:"trackingNo"`   // 运单号。
 	SeqNo        string              `json:"seqNo"`        // 查询流水号。
-	State        int                 `json:"state"`        // 查询状态，即爬虫是否返回了能够解析的查询结果（即使查询结果为空）。
+	State        int                 `json:"state"`        // 查询状态，即查询代理是否返回了能够解析的查询结果（即使查询结果为空）。
 	Message      string              `json:"message"`      // 运单状态对应的文本。
 	Delivered    int                 `json:"delivered"`    // 是否已妥投。1表示已妥投，0表示未妥投。
 	DeliveryDate string              `json:"deliveryDate"` // 妥投的时间。
@@ -144,8 +144,8 @@ func Trackings(ctx *gin.Context) {
 	// 从数据库中加载。
 	loadTrackingResultFromDb(trackingSearchList)
 
-	// 未妥投的记录（包含数据库中查不到的记录），都需要通过爬虫爬取。
-	// 将需要调用爬虫的记录推送到任务队列。
+	// 未妥投的记录（包含数据库中查不到的记录），都需要通过查询代理爬取。
+	// 将需要调用查询代理的记录推送到任务队列。
 	var trackingSearchList2 []*trackingSearch = make([]*trackingSearch, 0)
 	if keys, err := pushTrackingSearchToQueue(_types.Priority(req.Priority), trackingSearchList); err != nil {
 		// 推送查询对象到任务队列失败，放弃轮询缓存和拉取查询对象。
@@ -155,7 +155,7 @@ func Trackings(ctx *gin.Context) {
 			// 匹配查询结果。
 			matchAllEvents(trackingSearchList)
 
-			// 来自爬虫的查询结果会被保存到数据库。
+			// 来自查询代理的查询结果会被保存到数据库。
 			go func() {
 				defer _utils.RecoverPanic()
 

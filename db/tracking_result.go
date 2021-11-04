@@ -19,7 +19,7 @@ type TrackingResultPo struct {
 	Language    _types.LangId // 需要爬取的语言。
 	TrackingNo  string        // 运单号。
 	UpdateTime  time.Time     // 最新的业务更新时间。
-	EventsJson  string        // 事件JSON，也就是爬虫返回的有效结果。
+	EventsJson  string        // 事件JSON，也就是查询代理返回的有效结果。
 	Done        bool          // 是否已妥投。
 }
 

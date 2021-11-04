@@ -10,11 +10,11 @@ import (
 )
 
 type CrawlerInfoPo struct {
-	Name string // 爬虫名称。
-	Url  string // 访问爬虫的URL。
-	Type string // 爬虫类型。
+	Name string // 查询代理名称。
+	Url  string // 访问查询代理的URL。
+	Type string // 查询代理类型。
 
-	Id                int64  // 爬虫ID。
+	Id                int64  // 查询代理ID。
 	TargetUrl         string // 目标网页的URL。
 	ReqHttpMethod     string // 访问目标网页的HTTP Method
 	ReqHttpHeaders    string // 访问目标网页附带的头部。

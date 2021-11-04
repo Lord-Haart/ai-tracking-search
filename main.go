@@ -20,7 +20,7 @@ import (
 	_queue "com.cne/ai-tracking-search/queue"
 	"github.com/gin-gonic/gin"
 
-	_crawler "com.cne/ai-tracking-search/crawler"
+	_agent "com.cne/ai-tracking-search/agent"
 	_db "com.cne/ai-tracking-search/db"
 	_rpc "com.cne/ai-tracking-search/rpc"
 )
@@ -206,7 +206,7 @@ func loadConfigFromFile(configFile string) (err error) {
 
 func serveForEver() error {
 	go doServe()
-	go _crawler.Poll()
+	go _agent.Poll()
 
 	// 启动守护routine。
 	sigChannel := make(chan os.Signal, 256)

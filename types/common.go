@@ -91,12 +91,12 @@ func (p *Priority) String() string {
 	}
 }
 
-// 爬虫结果的来源。
+// 查询代理结果的来源。
 type TrackingResultSrc int
 
 const (
 	SrcAPI     TrackingResultSrc = 0 // 来自API。
-	SrcCrawler TrackingResultSrc = 1 // 来自爬虫。
+	SrcCrawler TrackingResultSrc = 1 // 来自查询代理。
 	SrcDB      TrackingResultSrc = 3 // 来自数据库。
 )
 
