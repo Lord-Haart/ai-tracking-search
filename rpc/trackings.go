@@ -6,6 +6,7 @@ package rpc
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	_crawler "com.cne/ai-tracking-search/crawler"
 	_types "com.cne/ai-tracking-search/types"
@@ -119,6 +120,13 @@ func Trackings(ctx *gin.Context) {
 		return
 	} else if len(req.Orders) > MaxBatchSize {
 		ctx.AbortWithError(400, fmt.Errorf("too many orders: [%d]", len(req.Orders)))
+		return
+	}
+
+	req.CarrierCode = strings.TrimSpace(req.CarrierCode)
+	if req.CarrierCode == "" {
+		ctx.AbortWithError(400, fmt.Errorf("carrier code cannot be empty"))
+		return
 	}
 
 	// 为每个运单号构造一个查询对象。
@@ -129,7 +137,7 @@ func Trackings(ctx *gin.Context) {
 			// 无法获取新的流水号，处理下一个查询对象。
 			continue
 		} else {
-			trackingSearchList = append(trackingSearchList, &trackingSearch{ReqTime: now, ClientAddr: clientAddr, SeqNo: seqNo, CarrierCode: req.CarrierCode, Language: req.Language, TrackingNo: order.TrackingNo, Done: false})
+			trackingSearchList = append(trackingSearchList, &trackingSearch{ReqTime: now, ClientAddr: clientAddr, SeqNo: seqNo, CarrierCode: req.CarrierCode, Language: req.Language, TrackingNo: strings.TrimSpace(order.TrackingNo), Done: false})
 		}
 	}
 

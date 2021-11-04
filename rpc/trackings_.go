@@ -18,8 +18,13 @@ import (
 
 // 从数据库中读取跟踪记录。
 // trackingSearchList 待读取相应跟踪记录的查询对象。每个对象都要到数据库中查询一次。
-func loadTrackingResultFromDb(trackingSearchList []*trackingSearch) error {
+func loadTrackingResultFromDb(trackingSearchList []*trackingSearch) {
 	for i, ts := range trackingSearchList {
+		// 跳过空单号，这种查询请求是不合法的。
+		if ts.TrackingNo == "" {
+			continue
+		}
+
 		tr := _db.QueryTrackingResultByTrackingNo(ts.CarrierCode, ts.Language, ts.TrackingNo)
 
 		if tr != nil {
@@ -35,7 +40,6 @@ func loadTrackingResultFromDb(trackingSearchList []*trackingSearch) error {
 			trackingSearchList[i] = ts
 		}
 	}
-	return nil
 }
 
 // 将查询对象推送到缓存和队列。
@@ -59,6 +63,11 @@ func pushTrackingSearchToQueue(priority _types.Priority, trackingSearchList []*t
 	avaiableUpdateTimeOfEmpty := time.Now().Add(time.Hour * -8) // 空单号有效更新时间。
 
 	for _, ts := range trackingSearchList {
+		// 跳过空单号，这种查询请求是不合法的。
+		if ts.TrackingNo == "" {
+			continue
+		}
+
 		// 数据库中存在跟踪记录，那么检查其它条件，判断是否可以直接使用数据库记录，而不再调用爬虫查询。
 		if len(ts.Events) != 0 {
 			if ts.Done {
