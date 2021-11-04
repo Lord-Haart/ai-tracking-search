@@ -147,6 +147,7 @@ func Trackings(ctx *gin.Context) {
 			// 匹配查询结果。
 			matchAllEvents(trackingSearchList)
 
+			// 来自爬虫的查询结果会被保存到数据库。
 			go func() {
 				defer _utils.RecoverPanic()
 

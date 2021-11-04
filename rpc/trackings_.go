@@ -403,7 +403,6 @@ func buildTrackingOrderResult(trackingSearch *trackingSearch) *trackingOrderRsp 
 	result := trackingOrderRsp{
 		TrackingNo:   trackingSearch.TrackingNo,
 		SeqNo:        trackingSearch.SeqNo,
-		State:        1, // 表示此结果来自于数据库或者爬虫爬取的有效网页内容。
 		Message:      "",
 		Delivered:    0,
 		DeliveryDate: "",
@@ -412,21 +411,22 @@ func buildTrackingOrderResult(trackingSearch *trackingSearch) *trackingOrderRsp 
 		Events:       events,
 	}
 
-	if trackingSearch.Done {
-		result.Delivered = 1
-		result.DeliveryDate = _utils.FormatTime(trackingSearch.DoneTime)
-		result.Destination = trackingSearch.DonePlace
-	}
-
-	if trackingSearch.CrawlerName == "" {
-		result.State = 0
-		result.Message = "$找不到匹配的爬虫$"
-	} else if trackingSearch.CrawlerCode == 0 {
-		result.State = 0
-		result.Message = "$无法调用爬虫$"
-	} else if !_crawler.IsSuccess(trackingSearch.CrawlerCode) {
+	if _crawler.IsSuccess(trackingSearch.CrawlerCode) {
+		result.State = 1 // 表示此结果来自于数据库或者爬虫爬取的有效网页内容。
+		if trackingSearch.Done {
+			result.Delivered = 1
+			result.DeliveryDate = _utils.FormatTime(trackingSearch.DoneTime)
+			result.Destination = trackingSearch.DonePlace
+		}
+	} else {
 		result.State = 0 // 表示爬虫发去的网页内容无效（不存在或者无法解析）。
-		result.Message = trackingSearch.Err
+		if trackingSearch.CrawlerName == "" {
+			result.Message = "$找不到匹配的爬虫$"
+		} else if trackingSearch.CrawlerCode == 0 {
+			result.Message = "$无法调用爬虫$"
+		} else {
+			result.Message = trackingSearch.Err
+		}
 	}
 
 	return &result
