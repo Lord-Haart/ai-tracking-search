@@ -87,7 +87,7 @@ func pushTrackingSearchToQueue(priority _types.Priority, trackingSearchList []*t
 		key := TrackingSearchKeyPrefix + "$" + ts.SeqNo
 
 		// 如果20秒内该查询对象尚未被查询代理执行则放弃。
-		if err := _cache.SetAndExpire(key, map[string]interface{}{"reqTime": _utils.FormatTime(ts.ReqTime), "carrierCode": ts.CarrierCode, "language": ts.Language.String(), "trackingNo": ts.TrackingNo, "clientAddr": ts.ClientAddr, "status": -1}, time.Second*26); err != nil {
+		if err := _cache.SetAndExpire(key, map[string]interface{}{"reqTime": _utils.FormatTime(ts.ReqTime), "carrierCode": ts.CarrierCode, "language": ts.Language.String(), "trackingNo": ts.TrackingNo, "clientAddr": ts.ClientAddr, "status": -1}, 60*time.Second); err != nil {
 			panic(err)
 		}
 

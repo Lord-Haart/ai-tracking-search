@@ -82,13 +82,13 @@ func PollForEver() {
 				chs[i] <- 1 // 将协程标记为就绪。
 			}()
 			pollOne()
+			time.Sleep(400 * time.Millisecond) // 喘口气 ^_^
 		}()
 	}
 
 	// 轮询，任何一个协程就绪，就启动。
 	for {
 		i, _, _ := reflect.Select(cases)
-		time.Sleep(400 * time.Millisecond) // 喘口气 ^_^
 		doPollOne(i)
 	}
 }
