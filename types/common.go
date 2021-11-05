@@ -46,8 +46,10 @@ func (l *LangId) MarshalJSON() ([]byte, error) {
 func (l *LangId) UnmarshalJSON(b []byte) error {
 	s := ""
 	if err := json.Unmarshal(b, &s); err != nil {
+		fmt.Printf("** %v\n", err)
 		return err
 	} else if ll, err := ParseLangId(s); err != nil {
+		fmt.Printf("*** %s\n", s)
 		return err
 	} else {
 		*l = ll
@@ -95,9 +97,10 @@ func (p *Priority) String() string {
 type TrackingResultSrc int
 
 const (
-	SrcAPI     TrackingResultSrc = 0 // 来自API。
-	SrcCrawler TrackingResultSrc = 1 // 来自查询代理。
-	SrcDB      TrackingResultSrc = 3 // 来自数据库。
+	SrcUnknown TrackingResultSrc = -1 // 未知。
+	SrcAPI     TrackingResultSrc = 0  // 来自API。
+	SrcCrawler TrackingResultSrc = 1  // 来自爬虫。
+	SrcDB      TrackingResultSrc = 3  // 来自数据库。
 )
 
 func (s *TrackingResultSrc) String() string {

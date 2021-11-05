@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -41,35 +42,53 @@ const (
 
 var (
 	allPriorities []_types.Priority // 所有消息队列的主题。
+
+	pollingBatchSize int // 轮询时每次处理的批量。
 )
 
 func init() {
 	allPriorities = []_types.Priority{_types.PriorityHighest, _types.PriorityHigh, _types.PriorityLow}
 }
 
+func InitAgent(pollingBatchSize_ int) error {
+	if pollingBatchSize_ <= 4 {
+		return fmt.Errorf("polling batch size should larger than 4, but %d", pollingBatchSize_)
+	}
+	if pollingBatchSize_ > 5000 {
+		return fmt.Errorf("polling batch size should not larger than 5000, but %d", pollingBatchSize_)
+	}
+
+	pollingBatchSize = pollingBatchSize_
+
+	return nil
+}
+
 // 启动轮询。
-func Poll() {
-	// TODO: 并发的轮询协程数应当在配置文件中配置。
-	n := 30
-	chs := make([]chan int, n)
-	for {
-		for i := 0; i < 30; i++ {
-			ch := make(chan int)
-			go func() {
-				defer func() {
-					_utils.RecoverPanic()
+func PollForEver() {
+	chs := make([]chan int, pollingBatchSize)
+	cases := make([]reflect.SelectCase, pollingBatchSize)
+	for i := 0; i < pollingBatchSize; i++ {
+		ch := make(chan int)
+		chs[i] = ch
+		cases[i] = reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(ch)}
+		go func() { ch <- 1 }() // 将协程标记为就绪。
+	}
 
-					ch <- 1
-				}()
-				pollOne()
+	doPollOne := func(i int) {
+		go func() {
+			defer func() {
+				_utils.RecoverPanic()
+
+				chs[i] <- 1 // 将协程标记为就绪。
 			}()
-			chs[i] = ch
-		}
+			pollOne()
+		}()
+	}
 
-		for i := 0; i < n; i++ {
-			<-chs[i]
-			close(chs[i])
-		}
+	// 轮询，任何一个协程就绪，就启动。
+	for {
+		i, _, _ := reflect.Select(cases)
+		doPollOne(i)
 	}
 }
 
@@ -80,9 +99,9 @@ func pollOne() {
 	if p != -1 {
 		seqNo := key[len(TrackingSearchKeyPrefix)+1:]
 
-		if os, err := _cache.Get(key, "reqTime", "carrierCode", "language", "trackingNo"); err != nil {
+		if os, err := _cache.Get(key, "reqTime", "carrierCode", "language", "trackingNo"); err != nil || os[0] == nil || os[1] == nil {
 			log.Printf("[ERROR] Cannot get tracking-search(key=%s) from cache: %s\n", key, err)
-			updateCache(key, "", fmt.Sprintf("$缓存丢失查询对象(seq-no=%s)$", seqNo), &agentResult{})
+			updateCache(key, _types.SrcUnknown, "", fmt.Sprintf("$缓存丢失查询对象(seq-no=%s)$", seqNo), &agentResult{})
 		} else {
 			reqTime := _utils.AsTime(os[0])
 			carrierCode := _utils.AsString(os[1])
@@ -94,40 +113,19 @@ func pollOne() {
 			}
 			trackingNo := _utils.AsString(os[3])
 
-			// TODO: 首先尝试找代理，如果找不到代理，那么调用对应的爬虫。
-
-			// 查询对应的查询代理和参数。
-			crawlerInfo := _db.QueryCrawlerInfoByCarrierCode(carrierCode, reqTime)
-
-			if crawlerInfo == nil {
-				log.Printf("[WARN] Cannot find suitable crawler for carrier[%s] at %s\n", carrierCode, reqTime)
-				updateCache(key, "", fmt.Sprintf("$没有匹配到查询代理(carrier-code=%s)$", carrierCode), &agentResult{})
+			// 尝试找API，如果找不到API，那么找爬虫。
+			apiInfo := _db.QueryApiInfoByCarrierCode(carrierCode, reqTime)
+			if apiInfo != nil {
+				callApi(key, apiInfo, seqNo, carrierCode, language, trackingNo)
 			} else {
-				_cache.Set(key, map[string]interface{}{"status": 0})
+				// 查询对应的查询代理和参数。
+				crawlerInfo := _db.QueryCrawlerInfoByCarrierCode(carrierCode, reqTime)
 
-				var cResult *agentResult
-				var cErr error
-				if crawlerInfo.Type == ctPython {
-					// 调用python查询代理。
-					cResult, cErr = callCrawlerByPython(crawlerInfo, seqNo, carrierCode, language, trackingNo)
-					if cErr != nil {
-						log.Printf("[WARN]: Cannot call python crawler %s\n", cErr)
-						updateCache(key, crawlerInfo.Name, fmt.Sprintf("$调用Python爬虫失败(carrier-code=%s,crawler-name=%s)$", carrierCode, crawlerInfo.Name), &agentResult{})
-					}
-				} else if crawlerInfo.Type == ctGo {
-					// 调用Go查询代理。
-					cResult, cErr = callCrawlerByGolang(crawlerInfo, seqNo, carrierCode, language, trackingNo)
-					if cErr != nil {
-						log.Printf("[WARN]: Cannot call golang crawler %s\n", cErr)
-						updateCache(key, crawlerInfo.Name, fmt.Sprintf("$调用GO爬虫失败(carrier-code=%s,crawler-name=%s)$", carrierCode, crawlerInfo.Name), &agentResult{})
-					}
+				if crawlerInfo != nil {
+					callCrawler(key, crawlerInfo, seqNo, carrierCode, language, trackingNo)
 				} else {
-					log.Printf("[WARN] Unsupported crawler type: %s\n", crawlerInfo.Type)
-					updateCache(key, crawlerInfo.Name, fmt.Sprintf("$不支持的爬虫类型(carrier-code=%s,crawler-name=%s,crawler-type=%s)$", carrierCode, crawlerInfo.Name, crawlerInfo.Type), &agentResult{})
-				}
-
-				if cResult != nil {
-					updateCache(key, crawlerInfo.Name, "", cResult)
+					log.Printf("[WARN] Cannot find suitable agent for carrier[%s] at %s\n", carrierCode, reqTime)
+					updateCache(key, _types.SrcUnknown, "", fmt.Sprintf("$没有匹配到查询代理(carrier-code=%s)$", carrierCode), &agentResult{})
 				}
 			}
 		}
@@ -148,6 +146,39 @@ func nextKey() (_types.Priority, string) {
 	}
 
 	return -1, ""
+}
+
+func callApi(key string, apiInfo *_db.ApiInfoPo, seqNo, carrierCode string, language _types.LangId, trackingNo string) {
+	_cache.Set(key, map[string]interface{}{"status": 0})
+}
+
+func callCrawler(key string, crawlerInfo *_db.CrawlerInfoPo, seqNo, carrierCode string, language _types.LangId, trackingNo string) {
+	_cache.Set(key, map[string]interface{}{"status": 0})
+
+	var cResult *agentResult
+	var cErr error
+	if crawlerInfo.Type == ctPython {
+		// 调用python查询代理。
+		cResult, cErr = callCrawlerByPython(crawlerInfo, seqNo, carrierCode, language, trackingNo)
+		if cErr != nil {
+			log.Printf("[WARN]: Cannot call python crawler %s\n", cErr)
+			updateCache(key, _types.SrcCrawler, crawlerInfo.Name, fmt.Sprintf("$调用Python爬虫失败(carrier-code=%s,crawler-name=%s)$", carrierCode, crawlerInfo.Name), &agentResult{})
+		}
+	} else if crawlerInfo.Type == ctGo {
+		// 调用Go查询代理。
+		cResult, cErr = callCrawlerByGolang(crawlerInfo, seqNo, carrierCode, language, trackingNo)
+		if cErr != nil {
+			log.Printf("[WARN]: Cannot call golang crawler %s\n", cErr)
+			updateCache(key, _types.SrcCrawler, crawlerInfo.Name, fmt.Sprintf("$调用GO爬虫失败(carrier-code=%s,crawler-name=%s)$", carrierCode, crawlerInfo.Name), &agentResult{})
+		}
+	} else {
+		log.Printf("[WARN] Unsupported crawler type: %s\n", crawlerInfo.Type)
+		updateCache(key, _types.SrcCrawler, crawlerInfo.Name, fmt.Sprintf("$不支持的爬虫类型(carrier-code=%s,crawler-name=%s,crawler-type=%s)$", carrierCode, crawlerInfo.Name, crawlerInfo.Type), &agentResult{})
+	}
+
+	if cResult != nil {
+		updateCache(key, _types.SrcCrawler, crawlerInfo.Name, "", cResult)
+	}
 }
 
 // 调用Go查询代理。
@@ -230,6 +261,6 @@ func callCrawlerByPython(crawlerInfo *_db.CrawlerInfoPo, seqNo, carrierCode stri
 	}
 }
 
-func updateCache(key string, agentName, agentErr string, result *agentResult) {
-	_cache.Set(key, map[string]interface{}{"status": 1, "agentName": agentName, "agentErr": agentErr, "agentStartTime": _utils.FormatTime(result.StartTime), "agentEndTime": _utils.FormatTime(result.EndTime), "agentResult": result.Result})
+func updateCache(key string, agentSrc _types.TrackingResultSrc, agentName, agentErr string, result *agentResult) {
+	_cache.Set(key, map[string]interface{}{"status": 1, "agentSrc": int(agentSrc), "agentName": agentName, "agentErr": agentErr, "agentStartTime": _utils.FormatTime(result.StartTime), "agentEndTime": _utils.FormatTime(result.EndTime), "agentResult": result.Result})
 }

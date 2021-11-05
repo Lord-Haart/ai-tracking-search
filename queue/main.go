@@ -6,6 +6,7 @@ package queue
 import (
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/go-redis/redis"
 )
@@ -65,5 +66,11 @@ func Push(topic string, value string) (int64, error) {
 // topic 主题。
 // 返回出队的值。
 func Pop(topic string) (string, error) {
-	return redisClient.RPop(topic).Result()
+	if v, err := redisClient.BRPop(1*time.Second, topic).Result(); err != nil {
+		return "", err
+	} else if len(v) < 2 {
+		return "", redis.Nil
+	} else {
+		return v[1], nil
+	}
 }

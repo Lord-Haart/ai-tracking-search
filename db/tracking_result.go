@@ -60,7 +60,6 @@ func QueryTrackingResultByTrackingNo(carrierCode string, language _types.LangId,
 }
 
 func SaveTrackingResultToDb(carrierId int64, language _types.LangId, trackingNo, eventsJson string, datePoint time.Time, done bool) int64 {
-	// TODO: 同时保存匹配之前的原始报文。
 	eventsJsonMd5 := fmt.Sprintf("%x", md5.Sum([]byte(eventsJson)))
 	var trackingStatus int
 	if done {

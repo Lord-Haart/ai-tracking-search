@@ -1,15 +1,13 @@
-// 该模块定义了`crawler_info`对象的数据库访问方法。
+// 该模块定义了`api_info`对象的数据库访问方法。
 // @Author: Haart
 // @Created: 2021-10-27
 package db
 
 import (
-	"database/sql"
-	"errors"
 	"time"
 )
 
-type CrawlerInfoPo struct {
+type ApiInfoPo struct {
 	Name string // 查询代理名称。
 	Url  string // 访问查询代理的URL。
 	Type string // 查询代理类型。
@@ -31,7 +29,7 @@ type CrawlerInfoPo struct {
 }
 
 const (
-	selectCrawlerInfoByCarrierCode = `select tci.id,
+	selectApiInfoByCarrierCode = `select tci.id,
 	tci.name, tci.req_url, tci.type, tcp.req_url, tcp.req_method, tcp.req_headers, tcp.req_data, tcp.req_verify, tcp.req_json, tcp.req_proxy,
 	tcp.req_timeout, tcp.site_encrypt, tcp.tracking_field_name, tcp.tracking_field_type, tcp.site_crawling_name, tcp.site_analyzed_name
 from tracking_crawler_info  tci
@@ -44,20 +42,20 @@ where ci.carrier_code = ?
 	and tci.service_status = 1
 	and tci.start_time <= ?
 	and tci.end_time >= ?
-	order by tci.priority limit 1
 	`
 )
 
-func QueryCrawlerInfoByCarrierCode(carrierCode string, datePoint time.Time) *CrawlerInfoPo {
-	result := CrawlerInfoPo{}
-	if err := db.QueryRow(selectCrawlerInfoByCarrierCode, carrierCode, datePoint, datePoint).Scan(&result.Id, &result.Name, &result.Url, &result.Type, &result.TargetUrl, &result.ReqHttpMethod, &result.ReqHttpHeaders, &result.ReqHttpBody,
-		&result.Verify, &result.Json, &result.ReqProxy, &result.ReqTimeout, &result.SiteEncrypt, &result.TrackingFieldName, &result.TrackingFieldType, &result.SiteCrawlingName, &result.SiteAnalyzedName); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil
-		} else {
-			panic(err)
-		}
-	} else {
-		return &result
-	}
+func QueryApiInfoByCarrierCode(carrierCode string, datePoint time.Time) *ApiInfoPo {
+	return nil
+	// result := ApiInfoPo{}
+	// if err := db.QueryRow(selectCrawlerInfoByCarrierCode, carrierCode, datePoint, datePoint).Scan(&result.Id, &result.Name, &result.Url, &result.Type, &result.TargetUrl, &result.ReqHttpMethod, &result.ReqHttpHeaders, &result.ReqHttpBody,
+	// 	&result.Verify, &result.Json, &result.ReqProxy, &result.ReqTimeout, &result.SiteEncrypt, &result.TrackingFieldName, &result.TrackingFieldType, &result.SiteCrawlingName, &result.SiteAnalyzedName); err != nil {
+	// 	if errors.Is(err, sql.ErrNoRows) {
+	// 		return nil
+	// 	} else {
+	// 		panic(err)
+	// 	}
+	// } else {
+	// 	return &result
+	// }
 }

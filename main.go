@@ -38,6 +38,8 @@ const (
 	DefaultRedisPort     int    = 6379        // 表示默认的Redis端口号。
 	DefaultRedisPassword string = ""          // 表示默认的Redis口令。
 	DefaultRedisDB       int    = 1           // 表示默认的Redis数据库。
+
+	DefaultAgentPollingBatchSize int = 50 // 表示默认的轮询批量数。
 )
 
 var (
@@ -54,6 +56,9 @@ var (
 			Port:     DefaultRedisPort,
 			Password: DefaultRedisPassword,
 			DB:       DefaultRedisDB,
+		},
+		Agent: AgentConfiguration{
+			PollingBatchSize: DefaultAgentPollingBatchSize,
 		},
 	}
 )
@@ -135,6 +140,11 @@ func main() {
 		panic(err)
 	}
 
+	// 初始化轮询参数。
+	if err := _agent.InitAgent(configuration.Agent.PollingBatchSize); err != nil {
+		panic(err)
+	}
+
 	// 开始服务。
 	err := serveForEver()
 	if err != nil {
@@ -206,7 +216,7 @@ func loadConfigFromFile(configFile string) (err error) {
 
 func serveForEver() error {
 	go doServe()
-	go _agent.Poll()
+	go _agent.PollForEver()
 
 	// 启动守护routine。
 	sigChannel := make(chan os.Signal, 256)

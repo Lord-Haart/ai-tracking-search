@@ -11,6 +11,8 @@ type Configuration struct {
 	DB DBConfiguration // 数据库设置。
 
 	Redis RedisConfiguration // Redis配置。
+
+	Agent AgentConfiguration // 查询代理配置。
 }
 
 type DBConfiguration struct {
@@ -22,4 +24,8 @@ type RedisConfiguration struct {
 	Port     int    // Redis 的端口。
 	Password string // Redis 的口令。
 	DB       int    // 使用的Redis数据库。
+}
+
+type AgentConfiguration struct {
+	PollingBatchSize int // 每次轮询的批量数。
 }

@@ -113,7 +113,7 @@ func pullTrackingSearchFromCache(priority _types.Priority, keys []string) ([]*tr
 		// 收集已完成的响应。
 		pc := 0
 		for _, key := range keys {
-			if os, err := _cache.Get(key, "reqTime", "carrierCode", "language", "trackingNo", "clientAddr", "status", "agentErr", "agentResult", "agentName", "agentStartTime", "agentEndTime"); err != nil {
+			if os, err := _cache.Get(key, "reqTime", "carrierCode", "language", "trackingNo", "clientAddr", "status", "agentSrc", "agentErr", "agentResult", "agentName", "agentStartTime", "agentEndTime"); err != nil {
 				return nil, fmt.Errorf("cannot get tracking-search(key=%s) from cache. cause=%w", key, err)
 			} else {
 				// 查询代理执行状态，该值由查询代理调度程序写入，和数据库中的`status`字段无关。
@@ -127,8 +127,9 @@ func pullTrackingSearchFromCache(priority _types.Priority, keys []string) ([]*tr
 
 				_cache.Del(key)
 
-				agentErr := _utils.AsString(os[6])
-				agentRspJson := strings.TrimSpace(_utils.AsString(os[7]))
+				agentSrc := _types.TrackingResultSrc(_utils.AsInt(os[6], 0))
+				agentErr := _utils.AsString(os[7])
+				agentRspJson := strings.TrimSpace(_utils.AsString(os[8]))
 				trackingResult := _agent.TrackingResult{Code: _agent.AcTimeout}
 				agentCode := _agent.AcTimeout
 				message := ""
@@ -184,14 +185,14 @@ func pullTrackingSearchFromCache(priority _types.Priority, keys []string) ([]*tr
 				trackingSearch := trackingSearch{
 					SeqNo:          key[len(TrackingSearchKeyPrefix)+1:],
 					ReqTime:        _utils.AsTime(os[0]),
-					Src:            _types.SrcCrawler,
+					Src:            agentSrc,
 					CarrierCode:    _utils.AsString(os[1]),
 					Language:       language,
 					TrackingNo:     _utils.AsString(os[3]),
 					ClientAddr:     _utils.AsString(os[4]),
-					AgentName:      _utils.AsString(os[8]),
-					AgentStartTime: _utils.AsTime(os[9]),
-					AgentEndTime:   _utils.AsTime(os[10]),
+					AgentName:      _utils.AsString(os[9]),
+					AgentStartTime: _utils.AsTime(os[10]),
+					AgentEndTime:   _utils.AsTime(os[11]),
 					Events:         events,
 					AgentCode:      agentCode,
 					Err:            agentErr,
