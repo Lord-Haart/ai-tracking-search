@@ -120,7 +120,8 @@ func pollOne() {
 			// 尝试找API，如果找不到API，那么找爬虫。
 			apiInfo := _db.QueryApiInfoByCarrierCode(carrierCode, reqTime)
 			if apiInfo != nil {
-				callApi(key, apiInfo, seqNo, carrierCode, language, trackingNo)
+				apiParams := _db.QueryApiParamsByApiId(apiInfo.Id)
+				callApi(key, apiInfo, apiParams, seqNo, carrierCode, language, trackingNo)
 			} else {
 				// 查询对应的查询代理和参数。
 				crawlerInfo := _db.QueryCrawlerInfoByCarrierCode(carrierCode, reqTime)
@@ -152,27 +153,78 @@ func nextKey() (_types.Priority, string) {
 	return -1, ""
 }
 
-func callApi(key string, apiInfo *_db.ApiInfoPo, seqNo, carrierCode string, language _types.LangId, trackingNo string) {
+func callApi(key string, apiInfo *_db.ApiInfoPo, apiParams []*_db.ApiParamPo, seqNo, carrierCode string, language _types.LangId, trackingNo string) {
 	_cache.Set(key, map[string]interface{}{"status": 0})
+
+	url := apiInfo.Url + "/fetchTrackInfoList"
+
+	data := map[string]interface{}{
+		"trackingNo": trackingNo,
+	}
+
+	for _, ap := range apiParams {
+		if ap.FieldName == "reqUrl" {
+			data["reqUrl"] = ap.FieldValue
+		} else if ap.FieldName == "siteAnalyzedName" {
+			data["siteAnalyzedName"] = ap.FieldValue
+		} else if ap.FieldName == "siteCrawlingName" {
+			data["siteCrawlingName"] = ap.FieldValue
+		} else if ap.FieldName == "reqProxy" {
+			data["reqProxy"] = ap.FieldValue
+		} else if ap.FieldName == "reqTimeout" {
+			data["reqTimeout"] = _utils.AsInt(ap.FieldValue, 0)
+		}
+	}
+
+	var dataJson string
+	if v, err := json.Marshal(data); err != nil {
+		panic(fmt.Errorf("cannot convert crawler params to json, cause=%w", err))
+	} else {
+		dataJson = string(v)
+	}
+
+	// TODO: 不使用Python，直接调用API。
+	log.Printf("[DEBUG] API by python processing {seq-no: %s, carrier-code: %s, tracking-no: %s} from %s [data=%s]\n", seqNo, carrierCode, trackingNo, url, dataJson)
+
+	// 固定使用POST方式调用Python查询代理。
+	aResult := &agentResult{StartTime: time.Now()}
+
+	if rsp, err := http.Post(url, "application/json", strings.NewReader(dataJson)); err != nil {
+		// 查询代理不可用。
+		log.Printf("[WARN]: Cannot call api {api-name=%s, carrier-code=%s, language=%s, tracking-no=%s seq-no=%s}. cause=%s",
+			apiInfo.Name, carrierCode, language.String(), trackingNo, seqNo, err)
+		updateCache(key, _types.SrcCrawler, apiInfo.Name, fmt.Sprintf("$调用API失败(carrier-code=%s,api-name=%s)$", carrierCode, apiInfo.Name), &agentResult{})
+	} else {
+		buf := strings.Builder{}
+		if _, err := io.Copy(&buf, rsp.Body); err != nil {
+			log.Printf("[WARN]: Cannot read response from api {api-name=%s, carrier-code=%s, language=%s, tracking-no=%s seq-no=%s}",
+				apiInfo.Name, carrierCode, language.String(), trackingNo, seqNo)
+		} else {
+			aResult.EndTime = time.Now()
+			aResult.Result = strings.ReplaceAll(strings.ReplaceAll(buf.String(), "'", "\""), "None", "\"\"") // Python查询代理返回的json格式字符串不合规，需要兼容。
+
+			updateCache(key, _types.SrcAPI, apiInfo.Name, "", aResult)
+		}
+	}
 }
 
 func callCrawler(key string, crawlerInfo *_db.CrawlerInfoPo, seqNo, carrierCode string, language _types.LangId, trackingNo string) {
 	_cache.Set(key, map[string]interface{}{"status": 0})
 
-	var cResult *agentResult
+	var aResult *agentResult
 	var cErr error
 	if crawlerInfo.Type == ctPython {
 		// 调用python查询代理。
-		cResult, cErr = callCrawlerByPython(crawlerInfo, seqNo, carrierCode, language, trackingNo)
+		aResult, cErr = callCrawlerByPython(crawlerInfo, seqNo, carrierCode, language, trackingNo)
 		if cErr != nil {
-			log.Printf("[WARN]: Cannot call python crawler %s\n", cErr)
+			log.Printf("[WARN]: Cannot call python crawler. cause=%s\n", cErr)
 			updateCache(key, _types.SrcCrawler, crawlerInfo.Name, fmt.Sprintf("$调用Python爬虫失败(carrier-code=%s,crawler-name=%s)$", carrierCode, crawlerInfo.Name), &agentResult{})
 		}
 	} else if crawlerInfo.Type == ctGo {
 		// 调用Go查询代理。
-		cResult, cErr = callCrawlerByGolang(crawlerInfo, seqNo, carrierCode, language, trackingNo)
+		aResult, cErr = callCrawlerByGolang(crawlerInfo, seqNo, carrierCode, language, trackingNo)
 		if cErr != nil {
-			log.Printf("[WARN]: Cannot call golang crawler %s\n", cErr)
+			log.Printf("[WARN]: Cannot call golang crawler. cause=%s\n", cErr)
 			updateCache(key, _types.SrcCrawler, crawlerInfo.Name, fmt.Sprintf("$调用GO爬虫失败(carrier-code=%s,crawler-name=%s)$", carrierCode, crawlerInfo.Name), &agentResult{})
 		}
 	} else {
@@ -180,8 +232,8 @@ func callCrawler(key string, crawlerInfo *_db.CrawlerInfoPo, seqNo, carrierCode 
 		updateCache(key, _types.SrcCrawler, crawlerInfo.Name, fmt.Sprintf("$不支持的爬虫类型(carrier-code=%s,crawler-name=%s,crawler-type=%s)$", carrierCode, crawlerInfo.Name, crawlerInfo.Type), &agentResult{})
 	}
 
-	if cResult != nil {
-		updateCache(key, _types.SrcCrawler, crawlerInfo.Name, "", cResult)
+	if aResult != nil {
+		updateCache(key, _types.SrcCrawler, crawlerInfo.Name, "", aResult)
 	}
 }
 

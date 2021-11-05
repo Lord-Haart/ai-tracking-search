@@ -4,58 +4,83 @@
 package db
 
 import (
+	"database/sql"
+	"errors"
 	"time"
 )
 
 type ApiInfoPo struct {
 	Name string // 查询代理名称。
 	Url  string // 访问查询代理的URL。
-	Type string // 查询代理类型。
 
-	Id                int64  // 查询代理ID。
-	TargetUrl         string // 目标网页的URL。
-	ReqHttpMethod     string // 访问目标网页的HTTP Method
-	ReqHttpHeaders    string // 访问目标网页附带的头部。
-	ReqHttpBody       string // 访问目标网页附带的数据。
-	Verify            bool   // 是否需要验证请求结果。TODO: 以后删除。
-	Json              bool   // 是否需要将payload序列化为json。TODO: 以后修改为 requestContentType
-	ReqProxy          string // 代理服务器。
-	ReqTimeout        int    // 访问目标网页的超时时间。
-	SiteEncrypt       int    // 目标站点是否加密 0-不加密，1-需要加密。
-	TrackingFieldName string // 附加字段名。
-	TrackingFieldType int    // 附加字段类型。
-	SiteCrawlingName  string
-	SiteAnalyzedName  string
+	ReqHttpType int // 1-GET 2-POST。
+
+	Id int64 // API设置ID。
+}
+
+type ApiParamPo struct {
+	FieldType   int    // 字段类型。
+	FieldName   string // 字段名。
+	FieldValue  string // 字段值。
+	IsHead      bool   // 是否请求头字段。
+	IsBody      bool   // 是否请求体字段。
+	NeedCrypt   bool   // 是否需要加密。
+	EncryptType int    // 加密算法。
 }
 
 const (
-	selectApiInfoByCarrierCode = `select tci.id,
-	tci.name, tci.req_url, tci.type, tcp.req_url, tcp.req_method, tcp.req_headers, tcp.req_data, tcp.req_verify, tcp.req_json, tcp.req_proxy,
-	tcp.req_timeout, tcp.site_encrypt, tcp.tracking_field_name, tcp.tracking_field_type, tcp.site_crawling_name, tcp.site_analyzed_name
-from tracking_crawler_info  tci
-left join tracking_crawler_param tcp on tcp.info_id = tci.id
-join carrier_info ci on ci.id = tci.carrier_id
+	selectApiInfoByCarrierCode = `select ta.id, ta.name, ta.api_url, ta.request_type
+from tracking_api ta
+join carrier_info ci on ci.id = ta.carrier_id
 where ci.carrier_code = ?
   and ci.status = 1
-	and tci.status = 1
-	and (tcp.status = 1 or tcp.status is null)
-	and tci.service_status = 1
-	and tci.start_time <= ?
-	and tci.end_time >= ?
+	and ta.status = 1
+	and ta.service_status = 1
+	and ta.start_time <= ?
+	and ta.end_time >= ?
+	`
+
+	selectApiParamsByApiId = `select tap.field_type, tap.field_name, tap.field_value, tap.is_head_param, tap.is_body_param, tap.need_encrypt, coalesce(tae.encrypt_type, 0)
+	from tracking_api_param tap
+	left join tracking_api_encrypt tae on tap.encrypt_id = tae.id and tae.status = 1
+	where api_id = ?
+	and tap.status = 1
+	order by tap.sort
 	`
 )
 
 func QueryApiInfoByCarrierCode(carrierCode string, datePoint time.Time) *ApiInfoPo {
-	return nil
-	// result := ApiInfoPo{}
-	// if err := db.QueryRow(selectCrawlerInfoByCarrierCode, carrierCode, datePoint, datePoint).Scan(&result.Id, &result.Name, &result.Url, &result.Type, &result.TargetUrl, &result.ReqHttpMethod, &result.ReqHttpHeaders, &result.ReqHttpBody,
-	// 	&result.Verify, &result.Json, &result.ReqProxy, &result.ReqTimeout, &result.SiteEncrypt, &result.TrackingFieldName, &result.TrackingFieldType, &result.SiteCrawlingName, &result.SiteAnalyzedName); err != nil {
-	// 	if errors.Is(err, sql.ErrNoRows) {
-	// 		return nil
-	// 	} else {
-	// 		panic(err)
-	// 	}
-	// } else {
-	// 	return &result
-	// }
+	result := ApiInfoPo{}
+	if err := db.QueryRow(selectApiInfoByCarrierCode, carrierCode, datePoint, datePoint).Scan(&result.Id, &result.Name, &result.Url, &result.ReqHttpType); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		} else {
+			panic(err)
+		}
+	} else {
+		return &result
+	}
+}
+
+func QueryApiParamsByApiId(apiId int64) []*ApiParamPo {
+	result := make([]*ApiParamPo, 0)
+	if rows, err := db.Query(selectApiParamsByApiId, apiId); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return result
+		} else {
+			panic(err)
+		}
+	} else {
+		defer rows.Close()
+
+		for rows.Next() {
+			apiParam := ApiParamPo{}
+			if err := rows.Scan(&apiParam.FieldType, &apiParam.FieldName, &apiParam.FieldValue, &apiParam.IsHead, &apiParam.IsBody, &apiParam.NeedCrypt, &apiParam.EncryptType); err != nil {
+				panic(err)
+			}
+			result = append(result, &apiParam)
+		}
+
+		return result
+	}
 }
