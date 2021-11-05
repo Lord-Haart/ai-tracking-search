@@ -18,6 +18,7 @@ import (
 
 	_cache "com.cne/ai-tracking-search/cache"
 	_queue "com.cne/ai-tracking-search/queue"
+	_utils "com.cne/ai-tracking-search/utils"
 	"github.com/gin-gonic/gin"
 
 	_agent "com.cne/ai-tracking-search/agent"
@@ -64,7 +65,8 @@ var (
 )
 
 func init() {
-	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
+	log.SetFlags(log.Ldate | log.Ltime | log.Llongfile)
+	log.SetOutput(&_utils.RollingFileLoggerWriter{Pattern: "log/" + AppName + "-$date.log"})
 
 	flag.BoolVar(&flagVersion, "version", false, "Shows version message")
 	flag.BoolVar(&flagHelp, "h", false, "Shows this help message")
