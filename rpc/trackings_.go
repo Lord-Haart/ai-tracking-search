@@ -129,8 +129,9 @@ func pullTrackingSearchFromCache(priority _types.Priority, keys []string) ([]*tr
 
 				reqTime := _utils.AsTime(os[1])
 				carrierCode := _utils.AsString(os[2])
-				trackingNo := _utils.AsString(os[3])
-				clientAddr := _utils.AsString(os[4])
+				language, _ := _types.ParseLangId(_utils.AsString(os[3]))
+				trackingNo := _utils.AsString(os[4])
+				clientAddr := _utils.AsString(os[5])
 				agentSrc := _types.TrackingResultSrc(_utils.AsInt(os[6], int(_types.SrcUnknown)))
 				agentErr := _utils.AsString(os[7])
 				agentRspJson := strings.TrimSpace(_utils.AsString(os[8]))
@@ -180,8 +181,6 @@ func pullTrackingSearchFromCache(priority _types.Priority, keys []string) ([]*tr
 						})
 					}
 				}
-
-				language, _ := _types.ParseLangId(_utils.AsString(os[2]))
 
 				// 此处忽略trackingResult.CodeMg，该字段似乎已经弃用。
 

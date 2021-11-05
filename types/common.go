@@ -46,10 +46,8 @@ func (l *LangId) MarshalJSON() ([]byte, error) {
 func (l *LangId) UnmarshalJSON(b []byte) error {
 	s := ""
 	if err := json.Unmarshal(b, &s); err != nil {
-		fmt.Printf("** %v\n", err)
 		return err
 	} else if ll, err := ParseLangId(s); err != nil {
-		fmt.Printf("*** %s\n", s)
 		return err
 	} else {
 		*l = ll
