@@ -335,7 +335,13 @@ func saveLogToDb(trackingSearchList []*trackingSearch) {
 		resultNote := ""
 		if ts.AgentCode == _agent.AcSuccess || ts.AgentCode == _agent.AcSuccess2 {
 			resultStatus = 1
-			resultNote = "查询成功"
+			if ts.Src != _types.SrcDB {
+				resultNote = "查询成功"
+			} else if ts.Done {
+				resultNote = "查询缓存成功（已妥投）"
+			} else {
+				resultNote = "查询缓存成功（未妥投）"
+			}
 		} else if ts.AgentCode == _agent.AcNoTracking {
 			resultStatus = 1
 			resultNote = "未查询到单号"
