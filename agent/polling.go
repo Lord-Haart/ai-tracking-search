@@ -100,8 +100,11 @@ func pollOne() {
 	if p != -1 {
 		seqNo := key[len(TrackingSearchKeyPrefix)+1:]
 
-		if os, err := _cache.Get(key, "reqTime", "carrierCode", "language", "trackingNo"); err != nil || os[0] == nil || os[1] == nil {
-			log.Printf("[ERROR] Cannot get tracking-search(key=%s) from cache: %s\n", key, err)
+		if os, err := _cache.Get(key, "reqTime", "carrierCode", "language", "trackingNo"); err != nil {
+			log.Printf("[ERROR] Cannot get tracking-search(key=%s) from cache. cause=%s\n", key, err)
+			updateCache(key, _types.SrcUnknown, "", fmt.Sprintf("$缓存不可用(seq-no=%s)$", seqNo), &agentResult{})
+		} else if os[0] == nil && os[1] == nil && os[2] == nil && os[3] == nil {
+			log.Printf("[ERROR] Cannot get tracking-search(key=%s) from cache\n", key)
 			updateCache(key, _types.SrcUnknown, "", fmt.Sprintf("$缓存丢失查询对象(seq-no=%s)$", seqNo), &agentResult{})
 		} else {
 			reqTime := _utils.AsTime(os[0])

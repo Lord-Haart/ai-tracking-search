@@ -113,11 +113,11 @@ func pullTrackingSearchFromCache(priority _types.Priority, keys []string) ([]*tr
 		// 收集已完成的响应。
 		pc := 0
 		for _, key := range keys {
-			if os, err := _cache.Get(key, "reqTime", "carrierCode", "language", "trackingNo", "clientAddr", "status", "agentSrc", "agentErr", "agentResult", "agentName", "agentStartTime", "agentEndTime"); err != nil {
+			if os, err := _cache.Get(key, "status", "reqTime", "carrierCode", "language", "trackingNo", "clientAddr", "agentSrc", "agentErr", "agentResult", "agentName", "agentStartTime", "agentEndTime"); err != nil {
 				return nil, fmt.Errorf("cannot get tracking-search(key=%s) from cache. cause=%w", key, err)
 			} else {
 				// 查询代理执行状态，该值由查询代理调度程序写入，和数据库中的`status`字段无关。
-				status := _utils.AsInt(os[5], -1)
+				status := _utils.AsInt(os[0], -1)
 				if status < 1 && c < maxPullCount {
 					// 如果返回码是-1或者0，说明查询代理尚未返回结果。
 					keys[pc] = key
@@ -127,9 +127,17 @@ func pullTrackingSearchFromCache(priority _types.Priority, keys []string) ([]*tr
 
 				_cache.Del(key)
 
-				agentSrc := _types.TrackingResultSrc(_utils.AsInt(os[6], 0))
+				reqTime := _utils.AsTime(os[1])
+				carrierCode := _utils.AsString(os[2])
+				trackingNo := _utils.AsString(os[3])
+				clientAddr := _utils.AsString(os[4])
+				agentSrc := _types.TrackingResultSrc(_utils.AsInt(os[6], int(_types.SrcUnknown)))
 				agentErr := _utils.AsString(os[7])
 				agentRspJson := strings.TrimSpace(_utils.AsString(os[8]))
+				agentName := _utils.AsString(os[9])
+				agentStartTime := _utils.AsTime(os[10])
+				agentEndTime := _utils.AsTime(os[11])
+
 				trackingResult := _agent.TrackingResult{Code: _agent.AcTimeout}
 				agentCode := _agent.AcTimeout
 				message := ""
@@ -184,15 +192,15 @@ func pullTrackingSearchFromCache(priority _types.Priority, keys []string) ([]*tr
 
 				trackingSearch := trackingSearch{
 					SeqNo:          key[len(TrackingSearchKeyPrefix)+1:],
-					ReqTime:        _utils.AsTime(os[0]),
+					ReqTime:        reqTime,
 					Src:            agentSrc,
-					CarrierCode:    _utils.AsString(os[1]),
+					CarrierCode:    carrierCode,
 					Language:       language,
-					TrackingNo:     _utils.AsString(os[3]),
-					ClientAddr:     _utils.AsString(os[4]),
-					AgentName:      _utils.AsString(os[9]),
-					AgentStartTime: _utils.AsTime(os[10]),
-					AgentEndTime:   _utils.AsTime(os[11]),
+					TrackingNo:     trackingNo,
+					ClientAddr:     clientAddr,
+					AgentName:      agentName,
+					AgentStartTime: agentStartTime,
+					AgentEndTime:   agentEndTime,
 					Events:         events,
 					AgentCode:      agentCode,
 					Err:            agentErr,

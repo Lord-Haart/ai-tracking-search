@@ -81,7 +81,9 @@ func IsZeroTime(t time.Time) bool {
 }
 
 func AsInt(o interface{}, dv int) int {
-	if r, ok := o.(int); ok {
+	if o == nil {
+		return dv
+	} else if r, ok := o.(int); ok {
 		return r
 	} else if r, ok := o.(string); ok {
 		if r, err := strconv.Atoi(r); err != nil {
@@ -111,7 +113,9 @@ func AsString(o interface{}) string {
 }
 
 func AsTime(o interface{}) time.Time {
-	if r, ok := o.(time.Time); ok {
+	if o == nil {
+		return time.Time{}
+	} else if r, ok := o.(time.Time); ok {
 		return r
 	} else if r, ok := o.(string); ok {
 		return ParseTime(r)
@@ -121,7 +125,9 @@ func AsTime(o interface{}) time.Time {
 }
 
 func AsBool(o interface{}) bool {
-	if r, ok := o.(bool); ok {
+	if o == nil {
+		return false
+	} else if r, ok := o.(bool); ok {
 		return r
 	} else if r, ok := o.(int); ok {
 		return r != 0

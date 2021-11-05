@@ -24,7 +24,7 @@ type TrackingResultPo struct {
 }
 
 const (
-	selectTrackingResultByTrackingNo string = `select tr.events_json, tr.update_time, tr.tracking_status = 4 from tracking_result tr
+	selectTrackingResultByTrackingNo string = `select tr.events_json, tr.update_time, coalesce(tr.tracking_status, -1) = 4 from tracking_result tr
 	inner join carrier_info ci on ci.id = tr.carrier_id
 	where ci.status = 1
 	  and tr.status = 1
