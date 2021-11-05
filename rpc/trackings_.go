@@ -154,8 +154,10 @@ func pullTrackingSearchFromCache(priority _types.Priority, keys []string) ([]*tr
 						// 如果反序列化的批量跟踪结果对象包含的运单记录超过1个，也报错。
 						crawlerRsp := _agent.ResponseWrapper{}
 						if err := json.Unmarshal(crawlerRspJsonBytes, &crawlerRsp); err != nil {
+							agentCode = _agent.AcParseFailed
 							log.Printf("[WARN] Cannot parse crawler result json: %v. cause=%s\n", agentRspJson, err)
 						} else if len(crawlerRsp.Items) != 1 {
+							agentCode = _agent.AcOther
 							log.Printf("[WARN] Length of crawler result should be just 1, but %#v\n", crawlerRsp)
 						} else {
 							trackingResult = crawlerRsp.Items[0]
