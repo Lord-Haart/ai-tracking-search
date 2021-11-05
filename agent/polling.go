@@ -262,5 +262,7 @@ func callCrawlerByPython(crawlerInfo *_db.CrawlerInfoPo, seqNo, carrierCode stri
 }
 
 func updateCache(key string, agentSrc _types.TrackingResultSrc, agentName, agentErr string, result *agentResult) {
-	_cache.Set(key, map[string]interface{}{"status": 1, "agentSrc": int(agentSrc), "agentName": agentName, "agentErr": agentErr, "agentStartTime": _utils.FormatTime(result.StartTime), "agentEndTime": _utils.FormatTime(result.EndTime), "agentResult": result.Result})
+	if err := _cache.Set(key, map[string]interface{}{"status": 1, "agentSrc": int(agentSrc), "agentName": agentName, "agentErr": agentErr, "agentStartTime": _utils.FormatTime(result.StartTime), "agentEndTime": _utils.FormatTime(result.EndTime), "agentResult": result.Result}); err != nil {
+		panic(err)
+	}
 }
