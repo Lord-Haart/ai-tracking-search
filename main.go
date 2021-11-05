@@ -39,7 +39,7 @@ const (
 	DefaultRedisPassword string = ""          // 表示默认的Redis口令。
 	DefaultRedisDB       int    = 1           // 表示默认的Redis数据库。
 
-	DefaultAgentPollingBatchSize int = 100 // 表示默认的轮询批量数。
+	DefaultAgentPollingBatchSize int = 1000 // 表示默认的轮询批量数。
 )
 
 var (
