@@ -10,6 +10,7 @@ import (
 )
 
 // 运输商类别。
+// 注意：外部接口中包含该类型，并且需要以字符串形式传递，所以需要为该类型提供自定义的`MarshalJSON`和`UnsarshalJSON`
 type CarrierType int
 
 const (
@@ -19,6 +20,59 @@ const (
 	CtCN            CarrierType = 4 // 中国运输商。
 	CtAirline       CarrierType = 5 // 航空公司。
 )
+
+func (ct *CarrierType) String() string {
+	if *ct == CtEMS {
+		return "EMS"
+	} else if *ct == CtUnion {
+		return "UNION"
+	} else if *ct == CtInternational {
+		return "INTERNATIONAL"
+	} else if *ct == CtCN {
+		return "CN"
+	} else if *ct == CtAirline {
+		return "AIRLINE"
+	} else {
+		return ""
+	}
+}
+
+// 将字符串解析为LangId
+// s 待解析的字符串，会被自动去除首尾空格，然后变为大写。
+// 返回解析结果。
+func ParseCarrierType(s string) (CarrierType, error) {
+	s = strings.ToUpper(strings.TrimSpace(s))
+
+	if s == "EMS" {
+		return CtEMS, nil
+	} else if s == "UNION" {
+		return CtUnion, nil
+	} else if s == "INTERNATIONAL" {
+		return CtInternational, nil
+	} else if s == "CN" {
+		return CtCN, nil
+	} else if s == "AIRLINE" {
+		return CtAirline, nil
+	} else {
+		return 0, fmt.Errorf("unkown carrier type: %s", s)
+	}
+}
+
+func (ct *CarrierType) MarshalJSON() ([]byte, error) {
+	return json.Marshal(ct.String())
+}
+
+func (l *CarrierType) UnmarshalJSON(b []byte) error {
+	s := ""
+	if err := json.Unmarshal(b, &s); err != nil {
+		return err
+	} else if ll, err := ParseCarrierType(s); err != nil {
+		return err
+	} else {
+		*l = ll
+		return nil
+	}
+}
 
 // 爬取的语言类型。
 // 注意：外部接口中包含该类型，并且需要以字符串形式传递，所以需要为该类型提供自定义的`MarshalJSON`和`UnsarshalJSON`
@@ -39,6 +93,21 @@ func (l *LangId) String() string {
 	}
 }
 
+// 将字符串解析为LangId
+// s 待解析的字符串，会被自动去除首尾空格，然后变为大写。
+// 返回解析结果。
+func ParseLangId(s string) (LangId, error) {
+	s = strings.ToUpper(strings.TrimSpace(s))
+
+	if s == "EN" {
+		return LangEN, nil
+	} else if s == "CN" {
+		return LangCN, nil
+	} else {
+		return 0, fmt.Errorf("unkown lang id: %s", s)
+	}
+}
+
 func (l *LangId) MarshalJSON() ([]byte, error) {
 	return json.Marshal(l.String())
 }
@@ -52,21 +121,6 @@ func (l *LangId) UnmarshalJSON(b []byte) error {
 	} else {
 		*l = ll
 		return nil
-	}
-}
-
-// 将字符串解析为LangId
-// s 待解析的字符串，会被自动去除首尾空格，然后变为大写。
-// 返回解析结果。
-func ParseLangId(s string) (LangId, error) {
-	s = strings.ToUpper(strings.TrimSpace(s))
-
-	if s == "EN" {
-		return LangEN, nil
-	} else if s == "CN" {
-		return LangCN, nil
-	} else {
-		return 0, fmt.Errorf("unkown lang id: %s", s)
 	}
 }
 
