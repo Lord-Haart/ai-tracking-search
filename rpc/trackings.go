@@ -71,6 +71,7 @@ type trackingSearch struct {
 }
 
 // 表示跟踪结果的一个事件。
+// 此处的结构必须和爬虫返回结果匹配。
 type trackingEvent struct {
 	Date    time.Time `json:"date"`   // 事件的时间。
 	Details string    `json:"detail"` // 事件的详细描述。
@@ -90,7 +91,7 @@ type trackingOrderRsp struct {
 	SeqNo        string              `json:"seqNo"`        // 查询流水号。
 	State        int                 `json:"state"`        // 查询状态，即查询代理是否返回了能够解析的查询结果（即使查询结果为空）。
 	Message      string              `json:"message"`      // 运单状态对应的文本。
-	Delivered    int                 `json:"delivered"`    // 是否已妥投。1表示已妥投，0表示未妥投。
+	Delivered    bool                `json:"delivered"`    // 是否已妥投。1表示已妥投，0表示未妥投。
 	DeliveryDate string              `json:"deliveryDate"` // 妥投的时间。
 	Destination  string              `json:"destination"`  // 妥投的目的地。
 	Cached       bool                `json:"cached"`       // 此响应是否来自于缓存。
@@ -100,10 +101,10 @@ type trackingOrderRsp struct {
 
 // 表示查询响应中的事件。
 type trackingEventRsp struct {
-	Date    string `json:"date"`    // 事件时间。
-	State   int    `json:"state"`   // 事件状态。
-	Place   string `json:"place"`   // 事件地点。
-	Details string `json:"details"` // 事件详细。
+	Date  string `json:"date"`  // 事件时间。
+	State int    `json:"state"` // 事件状态。
+	Place string `json:"place"` // 事件地点。
+	Info  string `json:"info"`  // 事件详细。
 }
 
 // 执行运单跟踪状态查询。
@@ -200,9 +201,8 @@ func buildTrackingsRsp(orders []*trackingOrderReq, r1, r2 []*trackingSearch) *tr
 	}()
 
 	result := trackingsRsp{Data: data}
-	result.Code = rSuccess
+	result.Status = rSuccess
 	result.Message = "success"
-	result.ErrorId = 0
 
 	return &result
 }
@@ -227,10 +227,10 @@ func buildTrackingOrderResult(trackingSearch *trackingSearch) *trackingOrderRsp 
 	events := make([]*trackingEventRsp, 0, len(trackingSearch.Events))
 	for _, evt := range trackingSearch.Events {
 		events = append(events, &trackingEventRsp{
-			Date:    _utils.FormatTime(evt.Date), // TODO: UTC?
-			State:   evt.State,
-			Place:   evt.Place,
-			Details: evt.Details,
+			Date:  _utils.FormatTime(evt.Date), // TODO: UTC?
+			State: evt.State,
+			Place: evt.Place,
+			Info:  evt.Details,
 		})
 	}
 
@@ -244,7 +244,7 @@ func buildTrackingOrderResult(trackingSearch *trackingSearch) *trackingOrderRsp 
 		TrackingNo:   trackingSearch.TrackingNo,
 		SeqNo:        trackingSearch.SeqNo,
 		Message:      "",
-		Delivered:    0,
+		Delivered:    false,
 		DeliveryDate: "",
 		Destination:  "",
 		Cached:       cached,
@@ -255,7 +255,7 @@ func buildTrackingOrderResult(trackingSearch *trackingSearch) *trackingOrderRsp 
 	if _agent.IsSuccess(trackingSearch.AgentCode) {
 		result.State = 1 // 表示此结果来自于数据库或者查询代理爬取的有效网页内容。
 		if trackingSearch.Done {
-			result.Delivered = 1
+			result.Delivered = true
 			result.DeliveryDate = _utils.FormatTime(trackingSearch.DoneTime) // TODO: UTC?
 			result.Destination = trackingSearch.DonePlace
 		}
@@ -277,7 +277,7 @@ func buildEmptyTrackingOrderResult(trackingNo string) *trackingOrderRsp {
 		SeqNo:        "",
 		State:        0, // 表示此结果是凭空构造的。
 		Message:      "Timeout",
-		Delivered:    0,
+		Delivered:    false,
 		DeliveryDate: "",
 		Destination:  "",
 		Events:       []*trackingEventRsp{},

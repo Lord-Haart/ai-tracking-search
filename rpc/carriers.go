@@ -102,9 +102,8 @@ func buildCarriersRsp(carriers []*_db.CarrierPo) *carriersRsp {
 	}
 
 	result := carriersRsp{Data: data}
-	result.Code = rSuccess
+	result.Status = rSuccess
 	result.Message = "success"
-	result.ErrorId = 0
 
 	return &result
 }
@@ -121,9 +120,8 @@ func buildMatchCarriersRsp(matchResults [][]*_db.CarrierPo) *matchCarrierRsp {
 	}
 
 	result := matchCarrierRsp{Data: data}
-	result.Code = rSuccess
+	result.Status = rSuccess
 	result.Message = "success"
-	result.ErrorId = 0
 
 	return &result
 }

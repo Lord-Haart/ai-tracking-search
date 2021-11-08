@@ -9,8 +9,7 @@ const (
 type commonRspCode string
 
 type commonRsp struct {
-	Code    commonRspCode       `json:"code"`    // 表示查询状态的代码，如果该字段是`trError`，那么`Data`字段不可用。
-	ErrorId int                 `json:"errorId"` // 表示具体错误描述的编码。
+	Status  commonRspCode       `json:"status"`  // 表示查询状态的代码，如果该字段是`rError`，那么`Data`字段不可用。
 	Message string              `json:"message"` // 查询状态代码对应的文本。
 	Data    []*trackingOrderRsp `json:"data"`    // 每个运单对应的查询结果。
 }
