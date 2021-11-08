@@ -24,7 +24,7 @@ const (
 	TrackingSearchKeyPrefix string = "TRACKING_SEARCH" // 缓存中的查询记录的Key的前缀。
 	TrackingQueueKey        string = "TRACKING_QUEUE"  // 查询记录队列Key。
 
-	maxPullCount = 40 // 轮询缓存的最大次数。
+	maxPullCount = 80 // 轮询缓存的最大次数。
 )
 
 // 表示查询请求。
@@ -93,7 +93,8 @@ type trackingOrderRsp struct {
 	Delivered    int                 `json:"delivered"`    // 是否已妥投。1表示已妥投，0表示未妥投。
 	DeliveryDate string              `json:"deliveryDate"` // 妥投的时间。
 	Destination  string              `json:"destination"`  // 妥投的目的地。
-	Src          string              `json:"src"`          // 响应的数据来源。
+	Cached       bool                `json:"cached"`       // 此响应是否来自于缓存。
+	CachedTime   string              `json:"cachedTime"`   // 此响应的缓存时间（UTC）。
 	Events       []*trackingEventRsp `json:"events"`       // 运单包含的事件。
 }
 
@@ -166,5 +167,119 @@ func Trackings(ctx *gin.Context) {
 		}
 	}
 
-	ctx.JSON(http.StatusOK, buildResult(req.Orders, trackingSearchList, trackingSearchList2))
+	ctx.JSON(http.StatusOK, buildTrackingsRsp(req.Orders, trackingSearchList, trackingSearchList2))
+}
+
+// 构造最终的响应结果。
+// orders 待查询的运单。
+// r1 来自数据库的响应结果。
+// r2 来自查询代理的响应结果。
+// 返回组合后的结果。返回结果按照 `orders` 的顺序排序。首先从r2中获取结果，如果不存在则尝试从r1中返回结果，否则返回一个表示未查询到的结果。
+func buildTrackingsRsp(orders []*trackingOrderReq, r1, r2 []*trackingSearch) *trackingsRsp {
+	data := make([]*trackingOrderRsp, 0, len(orders))
+
+	logList := make([]*trackingSearch, 0)
+	for _, orderReq := range orders {
+		if ts, ok := findTrackingSearchByTrackingNo(r2, orderReq.TrackingNo); ok {
+			data = append(data, buildTrackingOrderResult(ts))
+			logList = append(logList, ts)
+		} else {
+			if ts, ok := findTrackingSearchByTrackingNo(r1, orderReq.TrackingNo); ok {
+				data = append(data, buildTrackingOrderResult(ts))
+				logList = append(logList, ts)
+			} else {
+				data = append(data, buildEmptyTrackingOrderResult(ts.TrackingNo))
+			}
+		}
+	}
+
+	go func() {
+		defer _utils.RecoverPanic()
+
+		saveLogToDb(logList)
+	}()
+
+	result := trackingsRsp{Data: data}
+	result.Code = rSuccess
+	result.Message = "success"
+	result.ErrorId = 0
+
+	return &result
+}
+
+// 从查询对象集合中寻找运单号匹配的的查询对象。
+// trackingSearchList 查询对象集合。
+// trackingNo 待查询的运单号。
+func findTrackingSearchByTrackingNo(trackingSearchList []*trackingSearch, trackingNo string) (*trackingSearch, bool) {
+	for _, ts := range trackingSearchList {
+		if ts.TrackingNo == trackingNo {
+			return ts, true
+		}
+	}
+
+	return nil, false
+}
+
+// 根据运单查询对象构造一个运单查询响应对象。
+// trackingSearch 运单查询对象。
+// 返回已构造的运单查询响应对象。
+func buildTrackingOrderResult(trackingSearch *trackingSearch) *trackingOrderRsp {
+	events := make([]*trackingEventRsp, 0, len(trackingSearch.Events))
+	for _, evt := range trackingSearch.Events {
+		events = append(events, &trackingEventRsp{
+			Date:    _utils.FormatTime(evt.Date), // TODO: UTC?
+			State:   evt.State,
+			Place:   evt.Place,
+			Details: evt.Details,
+		})
+	}
+
+	cached := trackingSearch.Src == _types.SrcDB
+	cachedTime := ""
+	if cached {
+		cachedTime = _utils.FormatTime(trackingSearch.UpdateTime.In(time.UTC))
+	}
+
+	result := trackingOrderRsp{
+		TrackingNo:   trackingSearch.TrackingNo,
+		SeqNo:        trackingSearch.SeqNo,
+		Message:      "",
+		Delivered:    0,
+		DeliveryDate: "",
+		Destination:  "",
+		Cached:       cached,
+		CachedTime:   cachedTime,
+		Events:       events,
+	}
+
+	if _agent.IsSuccess(trackingSearch.AgentCode) {
+		result.State = 1 // 表示此结果来自于数据库或者查询代理爬取的有效网页内容。
+		if trackingSearch.Done {
+			result.Delivered = 1
+			result.DeliveryDate = _utils.FormatTime(trackingSearch.DoneTime) // TODO: UTC?
+			result.Destination = trackingSearch.DonePlace
+		}
+	} else {
+		result.State = 0 // 表示查询代理发去的网页内容无效（不存在或者无法解析）。
+		result.Message = trackingSearch.Err
+	}
+
+	return &result
+}
+
+// 构造一个空的表示无效的跟踪记录。
+// TMS 调用端要求返回结果中的运单记录和请求中的运单记录数量、顺序保持一致。
+// 如果既不能从数据库，也不能从查询代理获取跟踪结果，那么调用此方法生成一个。
+// trackingNo 运单号。
+func buildEmptyTrackingOrderResult(trackingNo string) *trackingOrderRsp {
+	return &trackingOrderRsp{
+		TrackingNo:   trackingNo,
+		SeqNo:        "",
+		State:        0, // 表示此结果是凭空构造的。
+		Message:      "Timeout",
+		Delivered:    0,
+		DeliveryDate: "",
+		Destination:  "",
+		Events:       []*trackingEventRsp{},
+	}
 }

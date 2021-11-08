@@ -109,6 +109,7 @@ func pollOne() {
 		} else {
 			reqTime := _utils.AsTime(os[0])
 			carrierCode := _utils.AsString(os[1])
+
 			var language _types.LangId
 			if v, err := _types.ParseLangId(_utils.AsString(os[2])); err != nil {
 				log.Printf("[WARN] Illegal language: %v\n", os[2])
@@ -318,7 +319,7 @@ func callCrawlerByPython(crawlerInfo *_db.CrawlerInfoPo, seqNo, carrierCode stri
 }
 
 func updateCache(key string, agentSrc _types.TrackingResultSrc, agentName, agentErr string, result *agentResult) {
-	if err := _cache.Set(key, map[string]interface{}{"status": 1, "agentSrc": int(agentSrc), "agentName": agentName, "agentErr": agentErr, "agentStartTime": _utils.FormatTime(result.StartTime), "agentEndTime": _utils.FormatTime(result.EndTime), "agentResult": result.Result}); err != nil {
+	if err := _cache.Set(key, map[string]interface{}{"status": 1, "agentSrc": int(agentSrc), "agentName": agentName, "agentErr": agentErr, "agentStartTime": _utils.AsString(result.StartTime), "agentEndTime": _utils.AsString(result.EndTime), "agentResult": result.Result}); err != nil {
 		panic(err)
 	}
 }

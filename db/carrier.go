@@ -11,25 +11,39 @@ import (
 )
 
 type CarrierPo struct {
-	Id             int64              `json:"id"`
-	Code           string             `json:"code"`
-	NameCn         string             `json:"nameCn"`
-	NameEn         string             `json:"nameEn"`
-	CarrierType    _types.CarrierType `json:"carrierType"`
-	CountryId      int                `json:"countryId"`
-	WebSiteUrl     string             `json:"webSiteUrl"`
-	Tel            string             `json:"tel"`
-	Email          string             `json:"email"`
-	Description    string             `json:"description"`
-	ServiceAvaible bool               `json:"serviceAvaiable"`
+	Id              int64
+	Code            string
+	NameCn          string
+	NameEn          string
+	CarrierType     _types.CarrierType
+	CountryId       int
+	WebSiteUrl      sql.NullString
+	Tel             sql.NullString
+	Email           sql.NullString
+	Description     sql.NullString
+	ServiceAvaible  bool
+	LogoUrl         sql.NullString
+	LogoFilename    sql.NullString
+	TrackingNoRules []*TrackingNoRulePo
+}
+
+type TrackingNoRulePo struct {
+	Id   int64
+	Name string
+	Code string
 }
 
 const (
 	selectCarrierInfoByCarrierCode string = `select id, country_id from carrier_info where carrier_code = ? and status = 1`
-	selectAllCarrierInfo           string = `select id, carrier_code, name_cn, name_en, carrier_type, country_id, website_url, tel, email, description, service_status 
-	from carrier_info
-	where status = 1 and service_status = 1
-	order by id`
+	selectAllCarrierInfo           string = `select distinct ci.id, ci.carrier_code, ci.name_cn, ci.name_en, ci.carrier_type, ci.country_id, ci.website_url, ci.tel, ci.email, ci.description, ci.service_status,
+	sba.real_path, sba.file_name,
+	tnr.id, tnr.name, tnrd.code
+	from carrier_info ci
+	left join tracking_no_rule tnr on tnr.carrier_id = ci.id and tnr.status = 1
+	left join tracking_no_rule_detail tnrd on tnrd.rule_id = tnr.id and tnrd.status = 1
+	left join sys_biz_attachment sba on sba.ext_id = ci.id and sba.ext_type = 1 and sba.status = 1
+	where ci.status = 1 and ci.carrier_code is not null
+	order by ci.id, tnr.id`
 )
 
 func QueryCarrierByCode(carrierCode string) *CarrierPo {
@@ -56,18 +70,49 @@ func QueryAllCarrier() []*CarrierPo {
 			panic(err)
 		}
 	} else {
+		carrier := (*CarrierPo)(nil)
 		for rows.Next() {
-			carrier := CarrierPo{}
+			var carrierId int64
+			var carrierCode, nameCn, nameEn string
+			var carrierType _types.CarrierType
+			var countryId int
 			var webSiteUrl, tel, email, description sql.NullString
-			if err := rows.Scan(&carrier.Id, &carrier.Code, &carrier.NameCn, &carrier.NameEn, &carrier.CarrierType, &carrier.CountryId, &webSiteUrl, &tel, &email, &description, &carrier.ServiceAvaible); err != nil {
+			var serviceAvaible bool
+			var logoUrl, logoFilename sql.NullString
+			var ruleId sql.NullInt64
+			var ruleName sql.NullString
+			var ruleCode sql.NullString
+			if err := rows.Scan(&carrierId, &carrierCode, &nameCn, &nameEn, &carrierType, &countryId, &webSiteUrl, &tel, &email, &description, &serviceAvaible, &logoUrl, &logoFilename, &ruleId, &ruleName, &ruleCode); err != nil {
 				panic(err)
 			} else {
-				carrier.WebSiteUrl = webSiteUrl.String
-				carrier.Tel = tel.String
-				carrier.Email = email.String
-				carrier.Description = description.String
-				result = append(result, &carrier)
+				if carrier == nil || carrier.Id != carrierId {
+					if carrier != nil {
+						result = append(result, carrier)
+					}
+					carrier = new(CarrierPo)
+					carrier.Id = carrierId
+					carrier.Code = carrierCode
+					carrier.NameCn = nameCn
+					carrier.NameEn = nameEn
+					carrier.CarrierType = carrierType
+					carrier.CountryId = countryId
+					carrier.WebSiteUrl = webSiteUrl
+					carrier.Tel = tel
+					carrier.Email = email
+					carrier.Description = description
+					carrier.ServiceAvaible = serviceAvaible
+					carrier.LogoUrl = logoUrl
+					carrier.LogoFilename = logoFilename
+					carrier.TrackingNoRules = make([]*TrackingNoRulePo, 0)
+				}
+
+				if ruleId.Valid {
+					carrier.TrackingNoRules = append(carrier.TrackingNoRules, &TrackingNoRulePo{Id: ruleId.Int64, Name: ruleName.String, Code: ruleCode.String})
+				}
 			}
+		}
+		if carrier != nil {
+			result = append(result, carrier)
 		}
 
 		return result

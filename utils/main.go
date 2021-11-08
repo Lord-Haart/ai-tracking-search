@@ -102,11 +102,39 @@ func AsInt(o interface{}, dv int) int {
 	}
 }
 
+func AsInt64(o interface{}, dv int64) int64 {
+	if o == nil {
+		return dv
+	} else if r, ok := o.(int64); ok {
+		return r
+	} else if r, ok := o.(string); ok {
+		if r, err := strconv.ParseInt(r, 10, 64); err != nil {
+			return dv
+		} else {
+			return r
+		}
+	} else if r, ok := o.(time.Time); ok {
+		return r.UnixMilli()
+	} else if r, ok := o.(bool); ok {
+		if r {
+			return 1
+		} else {
+			return 0
+		}
+	} else {
+		return dv
+	}
+}
+
 func AsString(o interface{}) string {
 	if o == nil {
 		return ""
 	} else if r, ok := o.(string); ok {
 		return r
+	} else if r, ok := o.(time.Time); ok {
+		return r.Format(time.RFC3339)
+	} else if r, ok := o.(*time.Time); ok {
+		return r.Format(time.RFC3339)
 	} else {
 		return fmt.Sprintf("%T", o)
 	}
@@ -117,8 +145,18 @@ func AsTime(o interface{}) time.Time {
 		return time.Time{}
 	} else if r, ok := o.(time.Time); ok {
 		return r
+	} else if r, ok := o.(*time.Time); ok {
+		return *r
+	} else if r, ok := o.(int64); ok {
+		return time.UnixMilli(r)
+	} else if r, ok := o.(int); ok {
+		return time.UnixMilli(int64(r))
 	} else if r, ok := o.(string); ok {
-		return ParseTime(r)
+		if v, err := time.Parse(time.RFC3339, r); err != nil {
+			return time.Time{}
+		} else {
+			return v
+		}
 	} else {
 		return time.Time{}
 	}
