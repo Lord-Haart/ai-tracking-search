@@ -109,20 +109,24 @@ type trackingEventRsp struct {
 
 // 执行运单跟踪状态查询。
 func Trackings(ctx *gin.Context) {
+	defer recover500(ctx)
+
 	req := trackingsReq{Priority: _types.PriorityLow, Language: _types.LangEN}
 	now := time.Now()
 
+	req.CarrierCode = strings.ToLower(strings.TrimSpace(req.CarrierCode))
+	for i := range req.Orders {
+		req.Orders[i].TrackingNo = strings.ToUpper(strings.TrimSpace(req.Orders[i].TrackingNo))
+	}
+
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.AbortWithError(400, fmt.Errorf("illegal request: %w", err))
-		return
+		panic(fmt.Errorf("illegal request: %w", err))
 	}
 
 	if len(req.Orders) == 0 {
-		ctx.AbortWithError(400, fmt.Errorf("orders cannot be empty"))
-		return
+		panic(fmt.Errorf("orders cannot be empty"))
 	} else if len(req.Orders) > MaxBatchSize {
-		ctx.AbortWithError(400, fmt.Errorf("too many orders: [%d]", len(req.Orders)))
-		return
+		panic(fmt.Errorf("too many orders: [%d]", len(req.Orders)))
 	}
 
 	req.CarrierCode = strings.TrimSpace(req.CarrierCode)
@@ -139,13 +143,14 @@ func Trackings(ctx *gin.Context) {
 			// 无法获取新的流水号，处理下一个查询对象。
 			continue
 		} else {
-			trackingSearchList = append(trackingSearchList, &trackingSearch{ReqTime: now, ClientAddr: clientAddr, SeqNo: seqNo, CarrierCode: req.CarrierCode, Language: req.Language, TrackingNo: strings.TrimSpace(order.TrackingNo), Done: false})
+			trackingSearchList = append(trackingSearchList, &trackingSearch{ReqTime: now, ClientAddr: clientAddr, SeqNo: seqNo, CarrierCode: req.CarrierCode, Language: req.Language, TrackingNo: order.TrackingNo, Done: false})
 		}
 	}
 
 	// 从数据库中加载。
 	loadTrackingResultFromDb(trackingSearchList)
 
+	// t1 := time.Time{}
 	// 未妥投的记录（包含数据库中查不到的记录），都需要通过查询代理爬取。
 	// 将需要调用查询代理的记录推送到任务队列。
 	var trackingSearchList2 []*trackingSearch = make([]*trackingSearch, 0)
@@ -157,7 +162,10 @@ func Trackings(ctx *gin.Context) {
 			// 匹配查询结果。
 			matchAllEvents(trackingSearchList)
 
+			// t1 = time.Now()
 			// 来自查询代理的查询结果会被保存到数据库。
+			// saveTrackingResultToDb(trackingSearchList) // 同步保存到数据库。
+
 			go func() {
 				defer _utils.RecoverPanic()
 
@@ -169,6 +177,8 @@ func Trackings(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, buildTrackingsRsp(req.Orders, trackingSearchList, trackingSearchList2))
+
+	// fmt.Printf("!!! %s\n", time.Now().Sub(t1))
 }
 
 // 构造最终的响应结果。
@@ -193,6 +203,8 @@ func buildTrackingsRsp(orders []*trackingOrderReq, r1, r2 []*trackingSearch) *tr
 			}
 		}
 	}
+
+	// saveLogToDb(logList) // 同步保存到数据库。
 
 	go func() {
 		defer _utils.RecoverPanic()

@@ -47,12 +47,13 @@ type matchCarrierRsp struct {
 
 // 执行运输商信息查询。
 func Carriers(ctx *gin.Context) {
+	defer recover500(ctx)
+
 	req := carriersReq{}
 	// now := time.Now()
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.AbortWithError(400, fmt.Errorf("illegal request: %w", err))
-		return
+		panic(fmt.Errorf("illegal request: %w", err))
 	}
 
 	ctx.JSON(http.StatusOK, buildCarriersRsp(_db.QueryAllCarrier()))
@@ -60,11 +61,12 @@ func Carriers(ctx *gin.Context) {
 
 // 尝试匹配运输商。
 func MatchCarriers(ctx *gin.Context) {
+	defer recover500(ctx)
+
 	req := matchCarrierReq{}
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.AbortWithError(400, fmt.Errorf("illegal request: %w", err))
-		return
+		panic(fmt.Errorf("illegal request: %w", err))
 	}
 
 	trackingNoList := make([]string, 0)

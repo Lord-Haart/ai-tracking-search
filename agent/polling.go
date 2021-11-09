@@ -155,7 +155,7 @@ func nextKey() (_types.Priority, string) {
 }
 
 func callApi(key string, apiInfo *_db.ApiInfoPo, apiParams []*_db.ApiParamPo, seqNo, carrierCode string, language _types.LangId, trackingNo string) {
-	_cache.Set(key, map[string]interface{}{"status": 0})
+	_cache.Update(key, map[string]interface{}{"status": 0})
 
 	url := apiInfo.Url + "/fetchTrackInfoList"
 
@@ -210,7 +210,7 @@ func callApi(key string, apiInfo *_db.ApiInfoPo, apiParams []*_db.ApiParamPo, se
 }
 
 func callCrawler(key string, crawlerInfo *_db.CrawlerInfoPo, seqNo, carrierCode string, language _types.LangId, trackingNo string) {
-	_cache.Set(key, map[string]interface{}{"status": 0})
+	_cache.Update(key, map[string]interface{}{"status": 0})
 
 	var aResult *agentResult
 	var cErr error
@@ -319,7 +319,7 @@ func callCrawlerByPython(crawlerInfo *_db.CrawlerInfoPo, seqNo, carrierCode stri
 }
 
 func updateCache(key string, agentSrc _types.TrackingResultSrc, agentName, agentErr string, result *agentResult) {
-	if err := _cache.Set(key, map[string]interface{}{"status": 1, "agentSrc": int(agentSrc), "agentName": agentName, "agentErr": agentErr, "agentStartTime": _utils.AsString(result.StartTime), "agentEndTime": _utils.AsString(result.EndTime), "agentResult": result.Result}); err != nil {
+	if err := _cache.SetAndExpire(key, map[string]interface{}{"status": 1, "agentSrc": int(agentSrc), "agentName": agentName, "agentErr": agentErr, "agentStartTime": _utils.AsString(result.StartTime), "agentEndTime": _utils.AsString(result.EndTime), "agentResult": result.Result}, 10*time.Second); err != nil {
 		panic(err)
 	}
 }

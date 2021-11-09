@@ -46,10 +46,11 @@ func InitRedisCache(host string, port int, password string, db int) error {
 	}
 }
 
-func Set(key string, fields map[string]interface{}) error {
-	_, err := redisClient.HMSet(key, fields).Result()
-	return err
-}
+// Deprecated 此方法会清除之前设置的过期时间。
+// func Set(key string, fields map[string]interface{}) error {
+// 	_, err := redisClient.HMSet(key, fields).Result()
+// 	return err
+// }
 
 // 保存指定的值到缓存，并设置过期时间。
 // key 缓存的键。
@@ -60,6 +61,20 @@ func SetAndExpire(key string, fields map[string]interface{}, expiration time.Dur
 
 	p.HMSet(key, fields)
 	p.Expire(key, expiration)
+
+	if _, err := p.Exec(); err != nil {
+		return err
+	} else {
+		return nil
+	}
+}
+
+func Update(key string, fields map[string]interface{}) error {
+	p := redisClient.Pipeline()
+
+	for hk, hv := range fields {
+		p.HSet(key, hk, hv)
+	}
 
 	if _, err := p.Exec(); err != nil {
 		return err

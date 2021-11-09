@@ -32,6 +32,9 @@ const (
 	  and ci.carrier_code = ?
 	  and tr.tracking_no = ?
 	  and tr.language = ?
+	  and tr.events_json <> ''
+	  order by tr.update_time
+	  limit 1
 	`
 
 	insertTrackingResult string = `insert into tracking_result (carrier_id, language, tracking_no, events_json, md5, status, create_time, update_time, tracking_status, v2)

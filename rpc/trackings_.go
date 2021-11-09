@@ -71,15 +71,18 @@ func pushTrackingSearchToQueue(priority _types.Priority, trackingSearchList []*t
 
 		// 数据库中存在跟踪记录，那么检查其它条件，判断是否可以直接使用数据库记录，而不再调用查询代理查询。
 		if len(ts.Events) != 0 {
-			if ts.Done {
-				// 已完成，这种查询对象不再需要执行。
-				continue
-			} else if priority != _types.PriorityHighest && (ts.UpdateTime.After(avaiableUpdateTime) || (len(ts.Events) == 0 && ts.UpdateTime.After(avaiableUpdateTimeOfEmpty))) {
-				// 未完成，但是当前优先级不是最高，并且满足以下两个条件之一：
-				// 1. 更新时间晚于有效更新时间（即数据比较新）;
-				// 2. 更新时间晚于有效更新时间2，并且之前查询结果是空单号;
-				// 这种查询对象也不再需要执行。
-				continue
+			// 优先级最高的情况下，必须调用查询代理。
+			if priority != _types.PriorityHighest {
+				if ts.Done {
+					// 已完成，这种查询对象不再需要执行。
+					continue
+				} else if ts.UpdateTime.After(avaiableUpdateTime) || (len(ts.Events) == 0 && ts.UpdateTime.After(avaiableUpdateTimeOfEmpty)) {
+					// 未完成，并且满足以下两个条件之一：
+					// 1. 更新时间晚于有效更新时间（即数据比较新）;
+					// 2. 更新时间晚于有效更新时间2，并且之前查询结果是空单号;
+					// 这种查询对象也不再需要执行。
+					continue
+				}
 			}
 		}
 
@@ -358,11 +361,14 @@ func saveLogToDb(trackingSearchList []*trackingSearch) {
 		}
 
 		var timing int64
-		if ts.AgentEndTime.Before(ts.AgentStartTime) {
-			timing = int64(^uint64(0) >> 1) // 最大整数。
+		var endTime time.Time
+		if !_utils.IsZeroTime(ts.AgentEndTime) {
+			endTime = ts.AgentEndTime
 		} else {
-			timing = ts.AgentEndTime.Sub(ts.AgentStartTime).Milliseconds()
+			endTime = time.Now()
 		}
+
+		timing = endTime.Sub(ts.ReqTime).Milliseconds()
 
 		carrierPo := _db.QueryCarrierByCode(ts.CarrierCode)
 		carrierId := int64(0)
