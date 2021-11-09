@@ -163,6 +163,8 @@ func callApi(key string, apiInfo *_db.ApiInfoPo, apiParams []*_db.ApiParamPo, se
 		"trackingNo": trackingNo,
 	}
 
+	reqData := map[string]interface{}{}
+
 	for _, ap := range apiParams {
 		if ap.FieldName == "reqUrl" {
 			data["reqUrl"] = ap.FieldValue
@@ -173,9 +175,17 @@ func callApi(key string, apiInfo *_db.ApiInfoPo, apiParams []*_db.ApiParamPo, se
 		} else if ap.FieldName == "reqProxy" {
 			data["reqProxy"] = ap.FieldValue
 		} else if ap.FieldName == "reqTimeout" {
-			data["reqTimeout"] = _utils.AsInt(ap.FieldValue, 0)
+			data["reqTimeout"] = _utils.AsInt(ap.FieldValue, 25)
+		} else {
+			if strings.Contains(ap.FieldValue, "{lan}") {
+				ap.FieldValue = strings.ReplaceAll(ap.FieldValue, "{lan}", strings.ToLower(language.String()))
+			}
+			reqData[ap.FieldName] = ap.FieldValue
 		}
 	}
+
+	reqDataJson, _ := json.Marshal(reqData)
+	data["reqData"] = string(reqDataJson)
 
 	var dataJson string
 	if v, err := json.Marshal(data); err != nil {

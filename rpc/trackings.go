@@ -189,19 +189,32 @@ func Trackings(ctx *gin.Context) {
 func buildTrackingsRsp(orders []*trackingOrderReq, r1, r2 []*trackingSearch) *trackingsRsp {
 	data := make([]*trackingOrderRsp, 0, len(orders))
 
+	isOk_ := func(ts0 *trackingSearch) bool {
+		return ts0 != nil && (ts0.Err == "" || ts0.Err == "success")
+	}
+
 	logList := make([]*trackingSearch, 0)
 	for _, orderReq := range orders {
-		if ts, ok := findTrackingSearchByTrackingNo(r2, orderReq.TrackingNo); ok {
-			data = append(data, buildTrackingOrderResult(ts))
-			logList = append(logList, ts)
+		var ts_ *trackingSearch
+		ts2, ok2 := findTrackingSearchByTrackingNo(r2, orderReq.TrackingNo)
+		ts1, ok1 := findTrackingSearchByTrackingNo(r1, orderReq.TrackingNo)
+
+		if ok2 && !ok1 {
+			ts_ = ts2
+		} else if !ok2 && ok1 {
+			ts_ = ts1
+		} else if !ok2 && !ok1 {
+			data = append(data, buildEmptyTrackingOrderResult(orderReq.TrackingNo))
+			continue
 		} else {
-			if ts, ok := findTrackingSearchByTrackingNo(r1, orderReq.TrackingNo); ok {
-				data = append(data, buildTrackingOrderResult(ts))
-				logList = append(logList, ts)
+			if isOk_(ts1) && !isOk_(ts2) {
+				ts_ = ts1
 			} else {
-				data = append(data, buildEmptyTrackingOrderResult(ts.TrackingNo))
+				ts_ = ts2
 			}
 		}
+		data = append(data, buildTrackingOrderResult(ts_))
+		logList = append(logList, ts_)
 	}
 
 	// saveLogToDb(logList) // 同步保存到数据库。
