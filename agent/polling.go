@@ -22,7 +22,7 @@ import (
 	_queue "com.cne/ai-tracking-search/queue"
 	_types "com.cne/ai-tracking-search/types"
 	_utils "com.cne/ai-tracking-search/utils"
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v8"
 )
 
 type agentResult struct {

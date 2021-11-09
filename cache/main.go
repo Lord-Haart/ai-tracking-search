@@ -4,11 +4,12 @@
 package cache
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"time"
 
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v8"
 )
 
 var (
@@ -17,7 +18,12 @@ var (
 	redisPassword string
 	redisDB       int
 	redisClient   *redis.Client
+	redisCtx      context.Context
 )
+
+func init() {
+	redisCtx = context.Background()
+}
 
 // 初始化Redis队列配置。
 // host Redis主机。
@@ -38,7 +44,7 @@ func InitRedisCache(host string, port int, password string, db int) error {
 	if client == nil {
 		return fmt.Errorf("cannot create redis client")
 	}
-	if _, err := client.Ping().Result(); err != nil {
+	if _, err := client.Ping(redisCtx).Result(); err != nil {
 		return err
 	} else {
 		redisClient = client
@@ -59,10 +65,10 @@ func InitRedisCache(host string, port int, password string, db int) error {
 func SetAndExpire(key string, fields map[string]interface{}, expiration time.Duration) error {
 	p := redisClient.TxPipeline()
 
-	p.HMSet(key, fields)
-	p.Expire(key, expiration)
+	p.HMSet(redisCtx, key, fields)
+	p.Expire(redisCtx, key, expiration)
 
-	if _, err := p.Exec(); err != nil {
+	if _, err := p.Exec(redisCtx); err != nil {
 		return err
 	} else {
 		return nil
@@ -73,10 +79,10 @@ func Update(key string, fields map[string]interface{}) error {
 	p := redisClient.Pipeline()
 
 	for hk, hv := range fields {
-		p.HSet(key, hk, hv)
+		p.HSet(redisCtx, key, hk, hv)
 	}
 
-	if _, err := p.Exec(); err != nil {
+	if _, err := p.Exec(redisCtx); err != nil {
 		return err
 	} else {
 		return nil
@@ -88,13 +94,13 @@ func Update(key string, fields map[string]interface{}) error {
 // fields 缓存内容的名字。
 // 返回被缓存的内容。
 func Get(key string, fields ...string) ([]interface{}, error) {
-	return redisClient.HMGet(key, fields...).Result()
+	return redisClient.HMGet(redisCtx, key, fields...).Result()
 }
 
 // 删除缓存。
 // key 缓存的键。
 func Del(key string) (int64, error) {
-	return redisClient.Del(key).Result()
+	return redisClient.Del(redisCtx, key).Result()
 }
 
 // 获取并删除缓存内容。
@@ -104,10 +110,10 @@ func Del(key string) (int64, error) {
 func Take(key string, fields ...string) ([]interface{}, error) {
 	p := redisClient.Pipeline()
 
-	p.HMGet(key, fields...)
-	p.Del(key)
+	p.HMGet(redisCtx, key, fields...)
+	p.Del(redisCtx, key)
 
-	if cc, err := p.Exec(); err != nil {
+	if cc, err := p.Exec(redisCtx); err != nil {
 		return nil, err
 	} else {
 		return cc[0].(*redis.SliceCmd).Result()
@@ -122,10 +128,10 @@ func Take(key string, fields ...string) ([]interface{}, error) {
 func GetAndExpire(key string, expiration time.Duration, fields ...string) ([]interface{}, error) {
 	p := redisClient.Pipeline()
 
-	p.HMGet(key, fields...).Result()
-	p.Expire(key, expiration)
+	p.HMGet(redisCtx, key, fields...).Result()
+	p.Expire(redisCtx, key, expiration)
 
-	if cc, err := p.Exec(); err != nil {
+	if cc, err := p.Exec(redisCtx); err != nil {
 		return nil, err
 	} else {
 		return cc[0].(*redis.SliceCmd).Result()
