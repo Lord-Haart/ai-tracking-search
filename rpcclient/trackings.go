@@ -1,61 +1,78 @@
-package rpc
+package rpcclient
 
 import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	_agent "com.cne/ai-tracking-search/agent"
 	_cache "com.cne/ai-tracking-search/cache"
-	_db "com.cne/ai-tracking-search/db"
 	_queue "com.cne/ai-tracking-search/queue"
 	_types "com.cne/ai-tracking-search/types"
 	_utils "com.cne/ai-tracking-search/utils"
 )
 
-// 从数据库中读取跟踪记录。
-// trackingSearchList 待读取相应跟踪记录的查询对象。每个对象都要到数据库中查询一次。
-func loadTrackingResultFromDb(trackingSearchList []*trackingSearch) {
-	for i, ts := range trackingSearchList {
-		// 跳过空单号，这种查询请求是不合法的。
-		if ts.TrackingNo == "" {
-			continue
-		}
+const (
+	trackingSearchKeyPrefix string = "TRACKING_SEARCH" // 缓存中的查询记录的Key的前缀。
+	trackingQueueKey        string = "TRACKING_QUEUE"  // 查询记录队列Key。
 
-		tr := _db.QueryTrackingResultByTrackingNo(ts.CarrierCode, ts.Language, ts.TrackingNo)
+	maxSearchQueueSize int64 = 10000 // 查询队列的最大长度。
+	maxPullCount       int   = 80    // 轮询缓存的最大次数。
+)
 
-		if tr != nil {
-			ts.Src = _types.SrcDB
-			ts.UpdateTime = tr.UpdateTime
-			if tr.EventsJson != "" {
-				json.Unmarshal([]byte(tr.EventsJson), &ts.Events)
-			} else {
-				ts.Events = []*trackingEvent{}
-			}
-			ts.AgentCode = _agent.AcSuccess2 // 如果跟踪记录来自于数据库，那么查询代理返回码字段固定为成功，因为该记录必然来自于之前曾经成功的查询。
-			ts.Done = tr.Done
-			trackingSearchList[i] = ts
-		}
-	}
+// 表示针对一个运单的查询，同时包含查询条件和查询结果。
+type TrackingSearch struct {
+	Src            _types.TrackingResultSrc // 来源。可以是 DB或者API或者CRAWLER
+	ClientAddr     string                   // 客户端IP地址。
+	ReqTime        time.Time                // 客户端发来请求的时间。
+	SeqNo          string                   // 查询流水号。
+	CarrierCode    string                   // 运输商编号。
+	Language       _types.LangId            // 需要爬取的语言。
+	TrackingNo     string                   // 运单号。
+	UpdateTime     time.Time                // 最后从查询代理更新的业务时间，即最新的事件时间。
+	AgentName      string                   // 查询代理的名字。
+	AgentStartTime time.Time                // 启动查询代理的时间。
+	AgentEndTime   time.Time                // 查询代理返回的时间。
+	Events         TrackingEvents           // 事件列表，也就是查询代理返回的有效结果。
+	AgentCode      _agent.AgCode            // 查询代理返回的的状态码。
+	Err            string                   // 查询代理发生错误时返回的的消息。
+	AgentRawText   string                   // 爬取发生错误时返回的原始文本。
+	DoneTime       time.Time                // 妥投时间。
+	DonePlace      string                   // 妥投的地点。
+	Done           bool                     // 是否已经妥投。
 }
+
+// 表示跟踪结果的一个事件。
+// 此处的结构必须和爬虫返回结果匹配。
+type TrackingEvent struct {
+	Date    time.Time `json:"date"`   // 事件的时间。
+	Details string    `json:"detail"` // 事件的详细描述。
+	Place   string    `json:"place"`  // 事件发生的地点。
+	State   int       `json:"state"`  // 事件的状态。
+}
+
+type TrackingEvents []*TrackingEvent
+
+func (s TrackingEvents) Len() int           { return len(s) }
+func (s TrackingEvents) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+func (s TrackingEvents) Less(i, j int) bool { return s[i].Date.After(s[j].Date) } // 时间上越晚的事件越小。
 
 // 将查询对象推送到缓存和队列。
 // priority 优先级。
 // trackingSearchList 待推送到缓存和队列的查询对象。
-func pushTrackingSearchToQueue(priority _types.Priority, trackingSearchList []*trackingSearch) ([]string, error) {
+func PushTrackingSearchToQueue(priority _types.Priority, trackingSearchList []*TrackingSearch) ([]string, error) {
 	keys := make([]string, 0)
 
-	queueTopic := TrackingQueueKey + "$" + priority.String()
+	queueTopic := trackingQueueKey + "$" + priority.String()
 
 	// 检查查询队列是否已经超长。
 	if cl, err := _queue.Length(queueTopic); err != nil {
 		return nil, err
 	} else {
-		if cl+int64(len(trackingSearchList)) > MaxSearchQueueSize {
+		if cl+int64(len(trackingSearchList)) > maxSearchQueueSize {
 			return nil, fmt.Errorf("too many searchs")
 		}
 	}
@@ -87,7 +104,7 @@ func pushTrackingSearchToQueue(priority _types.Priority, trackingSearchList []*t
 		}
 
 		// 查询对象保存到缓存。
-		key := TrackingSearchKeyPrefix + "$" + ts.SeqNo
+		key := trackingSearchKeyPrefix + "$" + ts.SeqNo
 
 		// 如果20秒内该查询对象尚未被查询代理执行则放弃。
 		if err := _cache.SetAndExpire(key, map[string]interface{}{"reqTime": _utils.AsString(ts.ReqTime), "carrierCode": ts.CarrierCode, "language": ts.Language.String(), "trackingNo": ts.TrackingNo, "clientAddr": ts.ClientAddr, "status": -1}, 60*time.Second); err != nil {
@@ -107,8 +124,8 @@ func pushTrackingSearchToQueue(priority _types.Priority, trackingSearchList []*t
 // priority 查询对象的优先级。
 // keys 查询对象的键集合。
 // 返回缓存中的查询对象。
-func pullTrackingSearchFromCache(priority _types.Priority, keys []string) ([]*trackingSearch, error) {
-	result := make([]*trackingSearch, 0, len(keys))
+func PullTrackingSearchFromCache(priority _types.Priority, keys []string) ([]*TrackingSearch, error) {
+	result := make([]*TrackingSearch, 0, len(keys))
 
 	// 全部查询成功或者重试次数太多则停止重试。
 	c := 0
@@ -145,7 +162,7 @@ func pullTrackingSearchFromCache(priority _types.Priority, keys []string) ([]*tr
 				trackingResult := _agent.TrackingResult{Code: _agent.AcTimeout}
 				agentCode := _agent.AcTimeout
 				message := ""
-				events := make([]*trackingEvent, 0)
+				events := make([]*TrackingEvent, 0)
 				if agentRspJson == "" {
 					log.Printf("[WARN] Cannot parse empty crawler result json\n")
 				} else {
@@ -178,7 +195,7 @@ func pullTrackingSearchFromCache(priority _types.Priority, keys []string) ([]*tr
 
 					// 将查询代理的事件列表映射为待匹配的事件。
 					for _, te := range trackingResult.TrackingEventList {
-						events = append(events, &trackingEvent{
+						events = append(events, &TrackingEvent{
 							Date:    _utils.ParseTime(te.Date), // TODO: 此处是否应当使用ParseUTCTime。
 							Details: te.Details,
 							Place:   te.Place,
@@ -194,8 +211,8 @@ func pullTrackingSearchFromCache(priority _types.Priority, keys []string) ([]*tr
 					agentErr = message
 				}
 
-				trackingSearch := trackingSearch{
-					SeqNo:          key[len(TrackingSearchKeyPrefix)+1:],
+				trackingSearch := TrackingSearch{
+					SeqNo:          key[len(trackingSearchKeyPrefix)+1:],
 					ReqTime:        reqTime,
 					Src:            agentSrc,
 					CarrierCode:    carrierCode,
@@ -238,147 +255,4 @@ func pullTrackingSearchFromCache(priority _types.Priority, keys []string) ([]*tr
 	}
 
 	return result, nil
-}
-
-// 匹配查询对象集合中包含的事件。
-// trackingSearchList 待匹配的查询对象集合。
-func matchAllEvents(trackingSearchList []*trackingSearch) {
-	for i, ts := range trackingSearchList {
-		rules := _db.QueryMatchRuleByCarrierCode(ts.CarrierCode, ts.ReqTime)
-
-		matchEvents(rules, ts)
-		trackingSearchList[i] = ts
-	}
-}
-
-// 匹配查询对象中的事件。
-// rules 关联的匹配规则。
-// 待匹配的查询对象。
-func matchEvents(rules []*_db.MatchRulePo, ts *trackingSearch) {
-	// 按事件排序。
-	sort.Stable(ts.Events)
-
-	for i, evt := range ts.Events {
-		// 两次遍历，第一次针对查询代理类别的规则进行匹配。
-		matched := false
-		delivered := false
-		evt.State = 2
-		for _, rule := range rules {
-			if rule.TargetType != "4" && rule.Match(evt.Details) {
-				evt.State, delivered = matchRuleCodeToState(rule.Code)
-				matched = true
-				break
-			}
-		}
-
-		if !matched {
-			// 第二次针对运输商类别的规则进行匹配。
-			for _, rule := range rules {
-				if rule.TargetType == "4" && rule.Match(evt.Details) {
-					evt.State, delivered = matchRuleCodeToState(rule.Code)
-					break
-				}
-			}
-		}
-		ts.Events[i] = evt
-
-		// 如果某个事件匹配到了已妥投，那么设置整个查询对象的状态为已妥投，并设置妥投时间和妥投地点。
-		if delivered {
-			ts.Done = true
-			ts.DoneTime = evt.Date
-			ts.DonePlace = evt.Place
-		}
-	}
-}
-
-// 将匹配规则代码映射为响应结果中的状态码。
-// code 匹配规则代码。
-// 返回对应的响应结果状态码，以及是否映射成功。
-func matchRuleCodeToState(code string) (int, bool) {
-	if code == "Delivered" {
-		return 3, true // 表示已妥投。
-	} else if code == "Undelivered" {
-		return 8, false // 表示投递失败。
-	} else {
-		return 2, false // 表示状态未知。
-	}
-}
-
-func saveTrackingResultToDb(trackingSearchList []*trackingSearch) {
-	now := time.Now()
-	for _, ts := range trackingSearchList {
-		var eventsJson string
-		if len(ts.Events) == 0 {
-			eventsJson = ""
-		} else {
-			if eventsJsonBytes, err := json.Marshal(ts.Events); err != nil {
-				panic(err)
-			} else {
-				eventsJson = string(eventsJsonBytes)
-			}
-		}
-
-		carrierPo := _db.QueryCarrierByCode(ts.CarrierCode)
-		if carrierPo != nil {
-			_db.SaveTrackingResultToDb(carrierPo.Id, ts.Language, ts.TrackingNo, eventsJson, now, ts.Done)
-			trackingId := _db.SaveTrackingToDb(carrierPo.Id, ts.Language, ts.TrackingNo, ts.DoneTime, ts.DonePlace, ts.Src, ts.AgentName, now, ts.Done)
-			for _, event := range ts.Events {
-				_db.SaveTrackingDetailToDb(trackingId, event.Date, event.Place, event.Details, event.State, now)
-			}
-		}
-	}
-}
-
-func saveLogToDb(trackingSearchList []*trackingSearch) {
-	now := time.Now()
-	operator := "auto"
-	for _, ts := range trackingSearchList {
-		matchType := 2 // 外部接口指定carrierCode。
-		resultStatus := 0
-		resultNote := ""
-		if ts.AgentCode == _agent.AcSuccess || ts.AgentCode == _agent.AcSuccess2 {
-			resultStatus = 1
-			if ts.Src != _types.SrcDB {
-				resultNote = "查询成功"
-			} else if ts.Done {
-				resultNote = "查询缓存成功（已妥投）"
-			} else {
-				resultNote = "查询缓存成功（未妥投）"
-			}
-		} else if ts.AgentCode == _agent.AcNoTracking {
-			resultStatus = 1
-			resultNote = "未查询到单号"
-		} else if ts.AgentCode == _agent.AcParseFailed {
-			resultNote = "无法解析目标网站页面"
-		} else if ts.AgentCode == _agent.AcTimeout {
-			resultNote = "查询目标网站超时"
-		} else {
-			resultNote = "未知错误"
-		}
-
-		if resultStatus == 0 && ts.Err != "" {
-			resultNote = resultNote + ": " + ts.Err
-		}
-
-		var timing int64
-		var endTime time.Time
-		if !_utils.IsZeroTime(ts.AgentEndTime) {
-			endTime = ts.AgentEndTime
-		} else {
-			endTime = time.Now()
-		}
-
-		timing = endTime.Sub(ts.ReqTime).Milliseconds()
-
-		carrierPo := _db.QueryCarrierByCode(ts.CarrierCode)
-		carrierId := int64(0)
-		countryId := 0
-		if carrierPo != nil {
-			// 没有匹配到运输商。但是也应该记录日志。
-			carrierId = carrierPo.Id
-			countryId = carrierPo.CountryId
-		}
-		_db.SaveTrackingLogToDb(carrierId, ts.TrackingNo, matchType, countryId, int(timing), ts.ClientAddr, resultStatus, now, ts.Src, now, operator,
-			ts.ReqTime, ts.AgentStartTime, ts.AgentEndTime, ts.AgentRawText, resultNote)
-	}
 }

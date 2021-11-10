@@ -37,6 +37,8 @@ const (
 	  limit 1
 	`
 
+	existsByTrackingNoAndMd5 string = `select exists(select 1 from tracking_result tr where carrier_id = ? and language = ? and tracking_no = ? and md5 = ?)`
+
 	insertTrackingResult string = `insert into tracking_result (carrier_id, language, tracking_no, events_json, md5, status, create_time, update_time, tracking_status, v2)
 	values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
@@ -70,6 +72,15 @@ func SaveTrackingResultToDb(carrierId int64, language _types.LangId, trackingNo,
 	} else {
 		trackingStatus = 1 // 在途。
 	}
+	exists := false
+	if err := db.QueryRow(existsByTrackingNoAndMd5, carrierId, language, trackingNo, eventsJsonMd5).Scan(&exists); err != nil {
+		panic(err)
+	}
+	if exists {
+		// 如果已存在同样的记录，那么放弃保存。
+		return -1
+	}
+
 	if result, err := db.Exec(insertTrackingResult, carrierId, language, trackingNo, eventsJson, eventsJsonMd5, 1 /*status*/, datePoint, datePoint, trackingStatus, 1 /*v2*/); err != nil {
 		panic(err)
 	} else {

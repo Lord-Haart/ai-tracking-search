@@ -32,12 +32,12 @@ type agentResult struct {
 }
 
 const (
-	TrackingSearchKeyPrefix = "TRACKING_SEARCH" // 缓存中的查询记录的Key的前缀。
-	TrackingQueueKey        = "TRACKING_QUEUE"  // 查询记录队列Key。
+	trackingSearchKeyPrefix string = "TRACKING_SEARCH" // 缓存中的查询记录的Key的前缀。
+	trackingQueueKey        string = "TRACKING_QUEUE"  // 查询记录队列Key。
 
-	ctPython = "PYTHON"
-	ctJava   = "JAVA"
-	ctGo     = "GO"
+	ctPython string = "PYTHON"
+	ctJava   string = "JAVA"
+	ctGo     string = "GO"
 )
 
 var (
@@ -98,7 +98,7 @@ func pollOne() {
 	p, key := nextKey()
 
 	if p != -1 {
-		seqNo := key[len(TrackingSearchKeyPrefix)+1:]
+		seqNo := key[len(trackingSearchKeyPrefix)+1:]
 
 		if os, err := _cache.Get(key, "reqTime", "carrierCode", "language", "trackingNo"); err != nil {
 			log.Printf("[ERROR] Cannot get tracking-search(key=%s) from cache. cause=%s\n", key, err)
@@ -140,7 +140,7 @@ func pollOne() {
 
 func nextKey() (_types.Priority, string) {
 	for _, p := range allPriorities {
-		if result, err := _queue.Pop(TrackingQueueKey + "$" + p.String()); err != nil {
+		if result, err := _queue.Pop(trackingQueueKey + "$" + p.String()); err != nil {
 			if errors.Is(err, redis.Nil) {
 				continue
 			} else {
