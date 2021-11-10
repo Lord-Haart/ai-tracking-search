@@ -241,6 +241,10 @@ func doServe() error {
 	router.POST("/match-carriers", _rpc.MatchCarriers)
 	router.POST("/trackings", _rpc.Trackings)
 
+	router.POST("/carrierlist", _rpc.Carriers)
+	router.POST("/matchcarrier", _rpc.MatchCarriers)
+	router.POST("/trackinglist", _rpc.Trackings)
+
 	fmt.Printf("Serving @ %s\n", configuration.Listen)
 
 	return router.Run(configuration.Listen)
