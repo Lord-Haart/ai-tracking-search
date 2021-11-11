@@ -22,7 +22,8 @@ func SaveTrackingLogToDb(carrierId int64, trackingNo string, matchType int, coun
 	datePoint time.Time, creator string, requestTime, crawlerStartTime, crawlerEndTime time.Time, crawlerRespBody, resultNote string) int64 {
 	crawlerStartTime_ := sql.NullTime{Time: crawlerStartTime, Valid: !_utils.IsZeroTime(crawlerStartTime)}
 	crawlerEndTime_ := sql.NullTime{Time: crawlerEndTime, Valid: !_utils.IsZeroTime(crawlerEndTime)}
-	if result, err := db.Exec(insertTrackingLog, carrierId, trackingNo, matchType, countryId, timing, host, resultStatus, statisticsDate, int(collectorType), 1 /*status*/, datePoint, creator, datePoint, creator,
+	collectorType_ := sql.NullInt32{Int32: int32(collectorType), Valid: collectorType != _types.SrcUnknown}
+	if result, err := db.Exec(insertTrackingLog, carrierId, trackingNo, matchType, countryId, timing, host, resultStatus, statisticsDate, collectorType_, 1 /*status*/, datePoint, creator, datePoint, creator,
 		requestTime, crawlerStartTime_, crawlerEndTime_, crawlerRespBody, resultNote); err != nil {
 		panic(err)
 	} else {

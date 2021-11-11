@@ -101,11 +101,15 @@ func pollOne() {
 		seqNo := key[len(trackingSearchKeyPrefix)+1:]
 
 		if os, err := _cache.Get(key, "reqTime", "carrierCode", "language", "trackingNo", "postcode", "dest", "date"); err != nil {
-			log.Printf("[ERROR] Cannot get tracking-search(key=%s) from cache. cause=%s\n", key, err)
-			updateCache(key, _types.SrcUnknown, "", fmt.Sprintf("$缓存不可用(seq-no=%s)$", seqNo), &agentResult{})
-		} else if os[0] == nil && os[1] == nil && os[2] == nil && os[3] == nil {
-			log.Printf("[ERROR] Cannot get tracking-search(key=%s) from cache\n", key)
-			updateCache(key, _types.SrcUnknown, "", fmt.Sprintf("$缓存丢失查询对象(seq-no=%s)$", seqNo), &agentResult{})
+			if errors.Is(err, redis.Nil) {
+				// 缓存中的查询请求已消失。
+				log.Printf("[ERROR] Cannot get tracking-search(key=%s) from cache\n", key)
+				updateCache(key, _types.SrcUnknown, "", fmt.Sprintf("$缓存丢失查询对象(seq-no=%s)$", seqNo), &agentResult{})
+			} else {
+				// 缓存本身不可用。
+				log.Printf("[ERROR] Cannot get tracking-search(key=%s) from cache. cause=%s\n", key, err)
+				updateCache(key, _types.SrcUnknown, "", fmt.Sprintf("$缓存不可用(seq-no=%s)$", seqNo), &agentResult{})
+			}
 		} else {
 			reqTime := _utils.AsTime(os[0])
 			carrierCode := _utils.AsString(os[1])

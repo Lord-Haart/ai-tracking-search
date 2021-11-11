@@ -32,9 +32,9 @@ type CrawlerInfoPo struct {
 
 const (
 	selectCrawlerInfoByCarrierCode = `select tci.id,
-	tci.name, tci.req_url, tci.type, tcp.req_url, tcp.req_method, tcp.req_headers, tcp.req_data, tcp.req_verify, tcp.req_json, tcp.req_proxy,
-	tcp.req_timeout, tcp.site_encrypt, tcp.tracking_field_name, tcp.tracking_field_type, tcp.site_crawling_name, tcp.site_analyzed_name
-from tracking_crawler_info  tci
+	tci.name, tci.req_url, tci.type, coalesce(tcp.req_url, ''), coalesce(tcp.req_method, ''), coalesce(tcp.req_headers, ''), coalesce(tcp.req_data, ''), coalesce(tcp.req_verify, 0), coalesce(tcp.req_json, 0), coalesce(tcp.req_proxy, ''),
+	coalesce(tcp.req_timeout, 0), coalesce(tcp.site_encrypt, 0), coalesce(tcp.tracking_field_name, ''), coalesce(tcp.tracking_field_type, 0), coalesce(tcp.site_crawling_name, ''), coalesce(tcp.site_analyzed_name, '')
+	from tracking_crawler_info  tci
 left join tracking_crawler_param tcp on tcp.info_id = tci.id
 join carrier_info ci on ci.id = tci.carrier_id
 where ci.carrier_code = ?

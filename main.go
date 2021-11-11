@@ -38,9 +38,9 @@ const (
 	DefaultRedisHost     string = "localhost" // 表示默认的Redis主机地址。
 	DefaultRedisPort     int    = 6379        // 表示默认的Redis端口号。
 	DefaultRedisPassword string = ""          // 表示默认的Redis口令。
-	DefaultRedisDB       int    = 1           // 表示默认的Redis数据库。
+	DefaultRedisDB       int    = 0           // 表示默认的Redis数据库。
 
-	DefaultAgentPollingBatchSize int = 1000 // 表示默认的轮询批量数。
+	DefaultAgentPollingBatchSize int = 200 // 表示默认的轮询批量数。
 )
 
 var (

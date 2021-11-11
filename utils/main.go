@@ -188,6 +188,21 @@ func ReverseString(s string) string {
 	return string(runes)
 }
 
+// 计算缩略字符串。
+// s 原始字符串。
+// l 最大长度。
+// 返回缩略后的字符串，长度不超过 `l`。
+func AbbrText(s string, l int) string {
+	if l <= 3 {
+		panic(fmt.Errorf("illegal parameter l: %d", l))
+	}
+	if len(s) <= l {
+		return s
+	} else {
+		return s[:l-3] + "..."
+	}
+}
+
 func RecoverPanic() {
 	if err := recover(); err != nil {
 		log.Printf("[ERROR] %s\n%s\n", err, string(debug.Stack()))

@@ -124,7 +124,9 @@ func Trackings(ctx *gin.Context) {
 		// 推送查询对象到任务队列失败，放弃轮询缓存和拉取查询对象。
 	} else {
 		// 从缓存拉取查询对象（以及查询结果）。
-		if trackingSearchList, err := _rpcclient.PullTrackingSearchFromCache(_types.Priority(req.Priority), keys); err == nil {
+		if trackingSearchList, err := _rpcclient.PullTrackingSearchFromCache(_types.Priority(req.Priority), keys); err != nil {
+			panic(err)
+		} else {
 			// 匹配跟踪结果中的事件。
 			matchAllEvents(trackingSearchList)
 

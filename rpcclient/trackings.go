@@ -2,6 +2,7 @@ package rpcclient
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 	_queue "com.cne/ai-tracking-search/queue"
 	_types "com.cne/ai-tracking-search/types"
 	_utils "com.cne/ai-tracking-search/utils"
+	"github.com/go-redis/redis/v8"
 )
 
 const (
@@ -20,7 +22,7 @@ const (
 	trackingQueueKey        string = "TRACKING_QUEUE"  // 查询记录队列Key。
 
 	maxSearchQueueSize int64 = 10000 // 查询队列的最大长度。
-	maxPullCount       int   = 80    // 轮询缓存的最大次数。
+	maxPullCount       int   = 70    // 轮询缓存的最大次数。
 )
 
 // 表示针对一个运单的查询，同时包含查询条件和查询结果。
@@ -137,7 +139,12 @@ func PullTrackingSearchFromCache(priority _types.Priority, keys []string) ([]*Tr
 		pc := 0
 		for _, key := range keys {
 			if os, err := _cache.Get(key, "status", "reqTime", "carrierCode", "language", "trackingNo", "clientAddr", "agentSrc", "agentErr", "agentResult", "agentName", "agentStartTime", "agentEndTime"); err != nil {
-				return nil, fmt.Errorf("cannot get tracking-search(key=%s) from cache. cause=%w", key, err)
+				if errors.Is(err, redis.Nil) {
+					// 缓存已消失，说明查询超时。
+					continue
+				} else {
+					return nil, fmt.Errorf("cannot get tracking-search(key=%s) from cache. cause=%w", key, err)
+				}
 			} else {
 				// 查询代理执行状态，该值由查询代理调度程序写入，和数据库中的`status`字段无关。
 				status := _utils.AsInt(os[0], -1)
@@ -178,7 +185,7 @@ func PullTrackingSearchFromCache(priority _types.Priority, keys []string) ([]*Tr
 						crawlerRsp := _agent.ResponseWrapper{}
 						if err := json.Unmarshal(crawlerRspJsonBytes, &crawlerRsp); err != nil {
 							agentCode = _agent.AcParseFailed
-							log.Printf("[WARN] Cannot parse crawler result json: %v. cause=%s\n", agentRspJson, err)
+							log.Printf("[WARN] Cannot parse crawler result json: %v. cause=%s\n", _utils.AbbrText(agentRspJson, 255), err)
 						} else if len(crawlerRsp.Items) != 1 {
 							agentCode = _agent.AcOther
 							log.Printf("[WARN] Length of crawler result should be just 1, but %#v\n", crawlerRsp)

@@ -6,6 +6,7 @@ package utils
 import (
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -16,16 +17,23 @@ const (
 var (
 	lastSeqNoTimestamp uint64
 	lastSeqNoMiniSeq   uint64
+
+	lock sync.Mutex
 )
 
 func init() {
 	lastSeqNoTimestamp = uint64(time.Now().UnixMilli())
 	lastSeqNoMiniSeq = 0
+
+	lock = sync.Mutex{}
 }
 
 // 生成一个新的流水号。
 // 使用简化版的雪花算法。
 func NewSeqNo() (string, error) {
+	lock.Lock()
+	defer lock.Unlock()
+
 	timestamp := uint64(time.Now().UnixMilli())
 
 	// 获取当前时间戳如果小于上次时间戳，则表示时间戳获取出现异常

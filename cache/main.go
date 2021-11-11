@@ -94,7 +94,21 @@ func Update(key string, fields map[string]interface{}) error {
 // fields 缓存内容的名字。
 // 返回被缓存的内容。
 func Get(key string, fields ...string) ([]interface{}, error) {
-	return redisClient.HMGet(redisCtx, key, fields...).Result()
+	if r, err := redisClient.HMGet(redisCtx, key, fields...).Result(); err != nil {
+		return nil, err
+	} else {
+		allNil := true
+		for _, o := range r {
+			if o != nil {
+				allNil = false
+			}
+		}
+		if allNil {
+			return nil, redis.Nil
+		} else {
+			return r, nil
+		}
+	}
 }
 
 // 删除缓存。
