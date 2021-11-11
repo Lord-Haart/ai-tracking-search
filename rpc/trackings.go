@@ -28,17 +28,21 @@ const (
 
 // 表示查询请求。
 type trackingsReq struct {
-	CarrierCode string              `json:"carrierCode" binding:"required"` // 运输商代号。
-	ClientId    string              `json:"clientId"`                       // 客户端ID。
-	Language    _types.LangId       `json:"language"`                       // 期望返回的语言。
-	Priority    _types.Priority     `json:"priority"`                       // 优先级(0-2)。
-	Token       string              `json:"token"`                          // 和客户端ID对应的鉴权标记。
-	Orders      []*trackingOrderReq `json:"orders"`                         // 请求包含的所有待查询运单。
+	CarrierCode string `json:"carrierCode" binding:"required"` // 运输商代号。
+	ClientId    string `json:"clientId"`                       // 客户端ID。
+	Timestamp   int
+	Language    _types.LangId       `json:"language"` // 期望返回的语言。
+	Priority    _types.Priority     `json:"priority"` // 优先级(0-2)。
+	Token       string              `json:"token"`    // 和客户端ID对应的鉴权标记。
+	Orders      []*trackingOrderReq `json:"orders"`   // 请求包含的所有待查询运单。
 }
 
 // 表示查询请求中的一个运单。
 type trackingOrderReq struct {
 	TrackingNo string `json:"trackingNo"` // 运单号。
+	Postcode   string `json:"postcode"`   // 收件人邮编。
+	Dest       string `json:"dst"`        // 收件人地址。
+	Date       string `json:"date"`       // 发件日期。
 }
 
 // 表示查询响应。

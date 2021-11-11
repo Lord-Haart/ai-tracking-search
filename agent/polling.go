@@ -100,7 +100,7 @@ func pollOne() {
 	if p != -1 {
 		seqNo := key[len(trackingSearchKeyPrefix)+1:]
 
-		if os, err := _cache.Get(key, "reqTime", "carrierCode", "language", "trackingNo"); err != nil {
+		if os, err := _cache.Get(key, "reqTime", "carrierCode", "language", "trackingNo", "postcode", "dest", "date"); err != nil {
 			log.Printf("[ERROR] Cannot get tracking-search(key=%s) from cache. cause=%s\n", key, err)
 			updateCache(key, _types.SrcUnknown, "", fmt.Sprintf("$缓存不可用(seq-no=%s)$", seqNo), &agentResult{})
 		} else if os[0] == nil && os[1] == nil && os[2] == nil && os[3] == nil {
@@ -118,17 +118,21 @@ func pollOne() {
 			}
 			trackingNo := _utils.AsString(os[3])
 
+			postcode := _utils.AsString((os[4]))
+			dest := _utils.AsString(os[5])
+			date := _utils.AsString(os[6])
+
 			// 尝试找API，如果找不到API，那么找爬虫。
 			apiInfo := _db.QueryApiInfoByCarrierCode(carrierCode, reqTime)
 			if apiInfo != nil {
 				apiParams := _db.QueryApiParamsByApiId(apiInfo.Id)
-				callApi(key, apiInfo, apiParams, seqNo, carrierCode, language, trackingNo)
+				callApi(key, apiInfo, apiParams, seqNo, carrierCode, language, trackingNo, postcode, dest, date)
 			} else {
 				// 查询对应的查询代理和参数。
 				crawlerInfo := _db.QueryCrawlerInfoByCarrierCode(carrierCode, reqTime)
 
 				if crawlerInfo != nil {
-					callCrawler(key, crawlerInfo, seqNo, carrierCode, language, trackingNo)
+					callCrawler(key, crawlerInfo, seqNo, carrierCode, language, trackingNo, postcode, dest, date)
 				} else {
 					log.Printf("[WARN] Cannot find suitable agent for carrier[%s] at %s\n", carrierCode, reqTime)
 					updateCache(key, _types.SrcUnknown, "", fmt.Sprintf("$没有匹配到查询代理(carrier-code=%s)$", carrierCode), &agentResult{})
@@ -154,7 +158,7 @@ func nextKey() (_types.Priority, string) {
 	return -1, ""
 }
 
-func callApi(key string, apiInfo *_db.ApiInfoPo, apiParams []*_db.ApiParamPo, seqNo, carrierCode string, language _types.LangId, trackingNo string) {
+func callApi(key string, apiInfo *_db.ApiInfoPo, apiParams []*_db.ApiParamPo, seqNo, carrierCode string, language _types.LangId, trackingNo, postcode, dest, date string) {
 	_cache.Update(key, map[string]interface{}{"status": 0})
 
 	url := apiInfo.Url + "/fetchTrackInfoList"
@@ -219,7 +223,7 @@ func callApi(key string, apiInfo *_db.ApiInfoPo, apiParams []*_db.ApiParamPo, se
 	}
 }
 
-func callCrawler(key string, crawlerInfo *_db.CrawlerInfoPo, seqNo, carrierCode string, language _types.LangId, trackingNo string) {
+func callCrawler(key string, crawlerInfo *_db.CrawlerInfoPo, seqNo, carrierCode string, language _types.LangId, trackingNo, postcode, dest, date string) {
 	_cache.Update(key, map[string]interface{}{"status": 0})
 
 	var aResult *agentResult

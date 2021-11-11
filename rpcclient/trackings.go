@@ -32,6 +32,9 @@ type TrackingSearch struct {
 	CarrierCode    string                   // 运输商编号。
 	Language       _types.LangId            // 需要爬取的语言。
 	TrackingNo     string                   // 运单号。
+	Postcode       string                   // 收件人邮编。
+	Dest           string                   // 收件人地址。
+	Date           string                   // 发件日期。
 	UpdateTime     time.Time                // 最后从查询代理更新的业务时间，即最新的事件时间。
 	AgentName      string                   // 查询代理的名字。
 	AgentStartTime time.Time                // 启动查询代理的时间。
@@ -107,7 +110,7 @@ func PushTrackingSearchToQueue(priority _types.Priority, trackingSearchList []*T
 		key := trackingSearchKeyPrefix + "$" + ts.SeqNo
 
 		// 如果20秒内该查询对象尚未被查询代理执行则放弃。
-		if err := _cache.SetAndExpire(key, map[string]interface{}{"reqTime": _utils.AsString(ts.ReqTime), "carrierCode": ts.CarrierCode, "language": ts.Language.String(), "trackingNo": ts.TrackingNo, "clientAddr": ts.ClientAddr, "status": -1}, 60*time.Second); err != nil {
+		if err := _cache.SetAndExpire(key, map[string]interface{}{"reqTime": _utils.AsString(ts.ReqTime), "carrierCode": ts.CarrierCode, "language": ts.Language.String(), "trackingNo": ts.TrackingNo, "postcode": ts.Postcode, "dest": ts.Dest, "date": ts.Date, "clientAddr": ts.ClientAddr, "status": -1}, 60*time.Second); err != nil {
 			panic(err)
 		}
 
