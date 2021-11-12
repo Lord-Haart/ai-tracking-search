@@ -271,13 +271,13 @@ func callCrawlerByGolang(crawlerInfo *_db.CrawlerInfoPo, seqNo, carrierCode stri
 	result := agentResult{StartTime: time.Now()}
 	if rsp, err := http.Get(url); err != nil {
 		// 查询代理不可用。
-		return &result, fmt.Errorf("cannot call crawler by golang {crawler-name=%s, carrier-code=%s, language=%s, tracking-no=%s seq-no=%s}",
-			crawlerInfo.Name, carrierCode, language.String(), trackingNo, seqNo)
+		return &result, fmt.Errorf("cannot call crawler by golang {crawler-name=%s, carrier-code=%s, language=%s, tracking-no=%s seq-no=%s}. cause=%w",
+			crawlerInfo.Name, carrierCode, language.String(), trackingNo, seqNo, err)
 	} else {
 		buf := strings.Builder{}
 		if _, err := io.Copy(&buf, rsp.Body); err != nil {
-			return &result, fmt.Errorf("cannot read response from crawler by golang {crawler-name=%s, carrier-code=%s, language=%s, tracking-no=%s seq-no=%s}",
-				crawlerInfo.Name, carrierCode, language.String(), trackingNo, seqNo)
+			return &result, fmt.Errorf("cannot read response from crawler by golang {crawler-name=%s, carrier-code=%s, language=%s, tracking-no=%s seq-no=%s}. cause=%w",
+				crawlerInfo.Name, carrierCode, language.String(), trackingNo, seqNo, err)
 		} else {
 			result.EndTime = time.Now()
 			result.Result = buf.String()
@@ -321,13 +321,13 @@ func callCrawlerByPython(crawlerInfo *_db.CrawlerInfoPo, seqNo, carrierCode stri
 
 	if rsp, err := http.Post(url, "application/json", strings.NewReader(dataJson)); err != nil {
 		// 查询代理不可用。
-		return &result, fmt.Errorf("cannot call crawler by golang {crawler-name=%s, carrier-code=%s, language=%s, tracking-no=%s seq-no=%s}",
-			crawlerInfo.Name, carrierCode, language.String(), trackingNo, seqNo)
+		return &result, fmt.Errorf("cannot call crawler by python {crawler-name=%s, carrier-code=%s, language=%s, tracking-no=%s seq-no=%s}. cause=%w",
+			crawlerInfo.Name, carrierCode, language.String(), trackingNo, seqNo, err)
 	} else {
 		buf := strings.Builder{}
 		if _, err := io.Copy(&buf, rsp.Body); err != nil {
-			return &result, fmt.Errorf("cannot read response from crawler by golang {crawler-name=%s, carrier-code=%s, language=%s, tracking-no=%s seq-no=%s}",
-				crawlerInfo.Name, carrierCode, language.String(), trackingNo, seqNo)
+			return &result, fmt.Errorf("cannot read response from crawler by golang {crawler-name=%s, carrier-code=%s, language=%s, tracking-no=%s seq-no=%s}. cause=%w",
+				crawlerInfo.Name, carrierCode, language.String(), trackingNo, seqNo, err)
 		} else {
 			result.EndTime = time.Now()
 			result.Result = strings.ReplaceAll(strings.ReplaceAll(buf.String(), "'", "\""), "None", "\"\"") // Python查询代理返回的json格式字符串不合规，需要兼容。
