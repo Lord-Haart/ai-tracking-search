@@ -89,25 +89,25 @@ func Trackings(ctx *gin.Context) {
 	validateReq(&req)
 
 	// 为每个运单号构造一个查询对象。
-	trackingSearchList := make([]*_rpcclient.TrackingSearch, 0, len(req.Orders))
+	trackingSearchList1 := make([]*_rpcclient.TrackingSearch, 0, len(req.Orders))
 	clientAddr := _utils.GetRemoteAddr(ctx.Request)
 	for _, order := range req.Orders {
 		if seqNo, err := _utils.NewSeqNo(); err != nil {
 			// 无法获取新的流水号，处理下一个查询对象。
 			continue
 		} else {
-			trackingSearchList = append(trackingSearchList, &_rpcclient.TrackingSearch{ReqTime: now, ClientAddr: clientAddr, SeqNo: seqNo, CarrierCode: req.CarrierCode, Language: req.Language, TrackingNo: order.TrackingNo, Done: false})
+			trackingSearchList1 = append(trackingSearchList1, &_rpcclient.TrackingSearch{ReqTime: now, Src: _types.SrcUnknown, ClientAddr: clientAddr, SeqNo: seqNo, CarrierCode: req.CarrierCode, Language: req.Language, TrackingNo: order.TrackingNo, Done: false})
 		}
 	}
 
 	// 从数据库中加载。
-	loadTrackingResultFromDb(trackingSearchList)
+	loadTrackingResultFromDb(trackingSearchList1)
 
 	// t1 := time.Time{}
 	// 未妥投的记录（包含数据库中查不到的记录），都需要通过查询代理爬取。
 	// 将需要调用查询代理的记录推送到任务队列。
 	var trackingSearchList2 []*_rpcclient.TrackingSearch = make([]*_rpcclient.TrackingSearch, 0)
-	if keys, err := _rpcclient.PushTrackingSearchToQueue(_types.Priority(req.Priority), trackingSearchList); err != nil {
+	if keys, err := _rpcclient.PushTrackingSearchToQueue(_types.Priority(req.Priority), trackingSearchList1); err != nil {
 		// 推送查询对象到任务队列失败，放弃轮询缓存和拉取查询对象。
 	} else {
 		// 从缓存拉取查询对象（以及查询结果）。
@@ -131,7 +131,7 @@ func Trackings(ctx *gin.Context) {
 		}
 	}
 
-	ctx.JSON(http.StatusOK, buildTrackingsRsp(req.Orders, trackingSearchList, trackingSearchList2))
+	ctx.JSON(http.StatusOK, buildTrackingsRsp(req.Orders, trackingSearchList1, trackingSearchList2))
 
 	// fmt.Printf("!!! %s\n", time.Now().Sub(t1))
 }
@@ -392,7 +392,9 @@ func buildTrackingsRsp(orders []*trackingOrderReq, r1, r2 []*_rpcclient.Tracking
 			data = append(data, buildEmptyTrackingOrderResult(orderReq.TrackingNo))
 			continue
 		} else {
-			if isOk_(ts1) && !isOk_(ts2) {
+			// 两个列表都找不到合适的结果，并且原始列表中的结果来源不是未知。
+			// 此时采纳原始列表中的结果。
+			if isOk_(ts1) && !isOk_(ts2) && ts1.Src != _types.SrcUnknown {
 				ts_ = ts1
 			} else {
 				ts_ = ts2
