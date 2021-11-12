@@ -27,6 +27,6 @@ func recover500(ctx *gin.Context) {
 		msg := fmt.Sprintf("%s\n%s", err, string(debug.Stack()))
 		log.Printf("[ERROR] %s\n", msg)
 
-		ctx.JSON(http.StatusOK, commonRsp{Status: rError, Message: msg})
+		ctx.JSON(http.StatusOK, commonRsp{Status: rError, Message: fmt.Sprintf("%s", err)})
 	}
 }

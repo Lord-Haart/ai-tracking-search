@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"net/http"
+	_url "net/url"
 
 	_cache "com.cne/ai-tracking-search/cache"
 	_db "com.cne/ai-tracking-search/db"
@@ -234,14 +235,14 @@ func callCrawler(key string, crawlerInfo *_db.CrawlerInfoPo, seqNo, carrierCode 
 	var cErr error
 	if crawlerInfo.Type == ctPython {
 		// 调用python查询代理。
-		aResult, cErr = callCrawlerByPython(crawlerInfo, seqNo, carrierCode, language, trackingNo)
+		aResult, cErr = callCrawlerByPython(crawlerInfo, seqNo, carrierCode, language, trackingNo, postcode, dest, date)
 		if cErr != nil {
 			log.Printf("[WARN]: Cannot call python crawler. cause=%s\n", cErr)
 			updateCache(key, _types.SrcCrawler, crawlerInfo.Name, fmt.Sprintf("$调用Python爬虫失败(carrier-code=%s,crawler-name=%s)$", carrierCode, crawlerInfo.Name), &agentResult{})
 		}
 	} else if crawlerInfo.Type == ctGo {
 		// 调用Go查询代理。
-		aResult, cErr = callCrawlerByGolang(crawlerInfo, seqNo, carrierCode, language, trackingNo)
+		aResult, cErr = callCrawlerByGolang(crawlerInfo, seqNo, carrierCode, language, trackingNo, postcode, dest, date)
 		if cErr != nil {
 			log.Printf("[WARN]: Cannot call golang crawler. cause=%s\n", cErr)
 			updateCache(key, _types.SrcCrawler, crawlerInfo.Name, fmt.Sprintf("$调用GO爬虫失败(carrier-code=%s,crawler-name=%s)$", carrierCode, crawlerInfo.Name), &agentResult{})
@@ -257,13 +258,14 @@ func callCrawler(key string, crawlerInfo *_db.CrawlerInfoPo, seqNo, carrierCode 
 }
 
 // 调用Go查询代理。
-func callCrawlerByGolang(crawlerInfo *_db.CrawlerInfoPo, seqNo, carrierCode string, language _types.LangId, trackingNo string) (*agentResult, error) {
+func callCrawlerByGolang(crawlerInfo *_db.CrawlerInfoPo, seqNo, carrierCode string, language _types.LangId, trackingNo, postcode, dest, date string) (*agentResult, error) {
 	url := crawlerInfo.Url
 	if strings.Contains(url, "?") {
 		url = url + "&nums=" + trackingNo
 	} else {
 		url = url + "?nums=" + trackingNo
 	}
+	url = url + "&carriercode=" + _url.PathEscape(carrierCode) + "&postcode=" + _url.PathEscape(postcode) + "&dest=" + _url.PathEscape(dest) + "&date=" + _url.PathEscape(date)
 
 	log.Printf("[DEBUG] Crawler by golang processing {seq-no: %s, carrier-code: %s, tracking-no: %s} from %s\n", seqNo, carrierCode, trackingNo, url)
 
@@ -287,7 +289,7 @@ func callCrawlerByGolang(crawlerInfo *_db.CrawlerInfoPo, seqNo, carrierCode stri
 }
 
 // 调用Python查询代理。
-func callCrawlerByPython(crawlerInfo *_db.CrawlerInfoPo, seqNo, carrierCode string, language _types.LangId, trackingNo string) (*agentResult, error) {
+func callCrawlerByPython(crawlerInfo *_db.CrawlerInfoPo, seqNo, carrierCode string, language _types.LangId, trackingNo, postcode, dest, date string) (*agentResult, error) {
 	url := crawlerInfo.Url + "/fetchTrackInfoList"
 
 	data := map[string]interface{}{
@@ -306,6 +308,10 @@ func callCrawlerByPython(crawlerInfo *_db.CrawlerInfoPo, seqNo, carrierCode stri
 		"reqHeaders":        crawlerInfo.ReqHttpHeaders,
 		"reqData":           crawlerInfo.ReqHttpBody,
 		"trackingNo":        trackingNo,
+		"carrierCode":       carrierCode,
+		"postcode":          postcode,
+		"dest":              dest,
+		"date":              date,
 	}
 	var dataJson string
 	if v, err := json.Marshal(data); err != nil {

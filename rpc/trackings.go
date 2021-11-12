@@ -4,6 +4,8 @@
 package rpc
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -28,13 +30,13 @@ const (
 
 // 表示查询请求。
 type trackingsReq struct {
-	CarrierCode string `json:"carrierCode" binding:"required"` // 运输商代号。
-	ClientId    string `json:"clientId"`                       // 客户端ID。
-	Timestamp   int
-	Language    _types.LangId       `json:"language"` // 期望返回的语言。
-	Priority    _types.Priority     `json:"priority"` // 优先级(0-2)。
-	Token       string              `json:"token"`    // 和客户端ID对应的鉴权标记。
-	Orders      []*trackingOrderReq `json:"orders"`   // 请求包含的所有待查询运单。
+	CarrierCode string              `json:"carrierCode" binding:"required"` // 运输商代号。
+	ClientId    string              `json:"clientId"`                       // 客户端ID。
+	Timestamp   int64               `json:"timestamp"`                      // 时间戳。
+	Language    _types.LangId       `json:"language"`                       // 期望返回的语言。
+	Priority    _types.Priority     `json:"priority"`                       // 优先级(0-2)。
+	Token       string              `json:"token"`                          // 和客户端ID对应的鉴权标记。
+	Orders      []*trackingOrderReq `json:"orders"`                         // 请求包含的所有待查询运单。
 }
 
 // 表示查询请求中的一个运单。
@@ -80,26 +82,11 @@ func Trackings(ctx *gin.Context) {
 	req := trackingsReq{Priority: _types.PriorityLow, Language: _types.LangEN}
 	now := time.Now()
 
-	req.CarrierCode = strings.ToLower(strings.TrimSpace(req.CarrierCode))
-	for i := range req.Orders {
-		req.Orders[i].TrackingNo = strings.ToUpper(strings.TrimSpace(req.Orders[i].TrackingNo))
-	}
-
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		panic(fmt.Errorf("illegal request: %w", err))
 	}
 
-	if len(req.Orders) == 0 {
-		panic(fmt.Errorf("orders cannot be empty"))
-	} else if len(req.Orders) > maxBatchSize {
-		panic(fmt.Errorf("too many orders: [%d]", len(req.Orders)))
-	}
-
-	req.CarrierCode = strings.TrimSpace(req.CarrierCode)
-	if req.CarrierCode == "" {
-		ctx.AbortWithError(400, fmt.Errorf("carrier code cannot be empty"))
-		return
-	}
+	validateReq(&req)
 
 	// 为每个运单号构造一个查询对象。
 	trackingSearchList := make([]*_rpcclient.TrackingSearch, 0, len(req.Orders))
@@ -147,6 +134,63 @@ func Trackings(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, buildTrackingsRsp(req.Orders, trackingSearchList, trackingSearchList2))
 
 	// fmt.Printf("!!! %s\n", time.Now().Sub(t1))
+}
+
+// 验证请求参数是否合乎接口定义。
+// req 待验证的请求参数。
+func validateReq(req *trackingsReq) {
+	now := time.Now()
+
+	// 校验token。
+	req.ClientId = strings.ToLower(strings.TrimSpace(req.ClientId))
+	if req.ClientId != "" {
+		clientTime := time.UnixMilli(req.Timestamp * 1000)
+		if clientTime.Before(now.Add(-30 * time.Second)) {
+			panic(fmt.Errorf("illegal timestamp"))
+		}
+		if clientSecret, err := loadClientSecret(req.ClientId); err != nil {
+			panic(err)
+		} else {
+			plainText := fmt.Sprintf("%s%d%s", req.ClientId, req.Timestamp, clientSecret)
+			md5Bytes := md5.Sum([]byte(plainText))
+			token := hex.EncodeToString(md5Bytes[:])
+			if token != req.Token {
+				panic(fmt.Errorf("illegal token"))
+			}
+		}
+	}
+
+	// 校验运输商编号。
+	req.CarrierCode = strings.ToLower(strings.TrimSpace(req.CarrierCode))
+	if req.CarrierCode == "" {
+		panic(fmt.Errorf("carrier code cannot be empty"))
+	}
+
+	// 校验运单号。
+	pc := 0
+	for _, order := range req.Orders {
+		order.TrackingNo = strings.ToUpper(strings.TrimSpace(order.TrackingNo))
+		if order.TrackingNo != "" {
+			req.Orders[pc] = order
+			pc++
+		}
+	}
+
+	req.Orders = req.Orders[:pc]
+
+	if len(req.Orders) == 0 {
+		panic(fmt.Errorf("orders cannot be empty"))
+	} else if len(req.Orders) > maxBatchSize {
+		panic(fmt.Errorf("too many orders: [%d]", len(req.Orders)))
+	}
+}
+
+func loadClientSecret(clientId string) (string, error) {
+	if clientId == "cne" {
+		return "jwVs72CJzNb7hOks#T@n9Z", nil
+	} else {
+		return "", fmt.Errorf("unknown client id: %s", clientId)
+	}
 }
 
 // 从数据库中读取跟踪记录。
