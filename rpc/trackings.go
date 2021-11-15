@@ -4,13 +4,12 @@
 package rpc
 
 import (
-	"crypto/md5"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 
 	_agent "com.cne/ai-tracking-search/agent"
@@ -144,17 +143,14 @@ func validateReq(req *trackingsReq) {
 	// 校验token。
 	req.ClientId = strings.ToLower(strings.TrimSpace(req.ClientId))
 	if req.ClientId != "" {
-		clientTime := time.UnixMilli(req.Timestamp * 1000)
+		clientTime := time.UnixMilli(req.Timestamp)
 		if clientTime.Before(now.Add(-30 * time.Second)) {
 			panic(fmt.Errorf("illegal timestamp"))
 		}
 		if clientSecret, err := loadClientSecret(req.ClientId); err != nil {
 			panic(err)
 		} else {
-			plainText := fmt.Sprintf("%s%d%s", req.ClientId, req.Timestamp, clientSecret)
-			md5Bytes := md5.Sum([]byte(plainText))
-			token := hex.EncodeToString(md5Bytes[:])
-			if token != req.Token {
+			if !_utils.VerifyWithMd5(req.Token, req.ClientId, strconv.FormatInt(req.Timestamp, 10), clientSecret) {
 				panic(fmt.Errorf("illegal token"))
 			}
 		}

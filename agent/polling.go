@@ -254,18 +254,25 @@ func callCrawler(key string, crawlerInfo *_db.CrawlerInfoPo, seqNo, carrierCode 
 
 	if aResult != nil {
 		updateCache(key, _types.SrcCrawler, crawlerInfo.Name, "", aResult)
+
+		go _db.UpgradeHeartBeatNo(crawlerInfo.Id, trackingNo)
 	}
 }
 
 // 调用Go查询代理。
 func callCrawlerByGolang(crawlerInfo *_db.CrawlerInfoPo, seqNo, carrierCode string, language _types.LangId, trackingNo, postcode, dest, date string) (*agentResult, error) {
+	carrierCode = strings.ToLower(carrierCode)
+	trackingNo = strings.ToUpper(trackingNo)
+
 	url := crawlerInfo.Url
 	if strings.Contains(url, "?") {
 		url = url + "&nums=" + trackingNo
 	} else {
 		url = url + "?nums=" + trackingNo
 	}
-	url = url + "&carriercode=" + _url.PathEscape(carrierCode) + "&postcode=" + _url.PathEscape(postcode) + "&dest=" + _url.PathEscape(dest) + "&date=" + _url.PathEscape(date)
+
+	token := _utils.SignWithMd5(carrierCode, trackingNo, language.String(), postcode, dest, date)
+	url = url + "&lan=" + _url.QueryEscape(language.String()) + "&carriercode=" + _url.QueryEscape(carrierCode) + "&postcode=" + _url.QueryEscape(postcode) + "&dest=" + _url.QueryEscape(dest) + "&date=" + _url.QueryEscape(date) + "&token=" + _url.QueryEscape(token)
 
 	log.Printf("[DEBUG] Crawler by golang processing {seq-no: %s, carrier-code: %s, tracking-no: %s} from %s\n", seqNo, carrierCode, trackingNo, url)
 

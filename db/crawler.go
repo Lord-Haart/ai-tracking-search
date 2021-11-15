@@ -46,6 +46,8 @@ where ci.carrier_code = ?
 	and tci.end_time >= ?
 	order by tci.priority limit 1
 	`
+
+	updateCrawlerHeartBeatNo = `update tracking_crawler_info set heart_beat_no = ? where id = ?`
 )
 
 func QueryCrawlerInfoByCarrierCode(carrierCode string, datePoint time.Time) *CrawlerInfoPo {
@@ -59,5 +61,11 @@ func QueryCrawlerInfoByCarrierCode(carrierCode string, datePoint time.Time) *Cra
 		}
 	} else {
 		return &result
+	}
+}
+
+func UpgradeHeartBeatNo(crawlerId int64, trackingNo string) {
+	if _, err := db.Exec(updateCrawlerHeartBeatNo, trackingNo, crawlerId); err != nil {
+		panic(err)
 	}
 }
