@@ -255,7 +255,11 @@ func callCrawler(key string, crawlerInfo *_db.CrawlerInfoPo, seqNo, carrierCode 
 	if aResult != nil {
 		updateCache(key, _types.SrcCrawler, crawlerInfo.Name, "", aResult)
 
-		go _db.UpgradeHeartBeatNo(crawlerInfo.Id, trackingNo)
+		go func() {
+			if _db.UpgradeHeartBeatNo(crawlerInfo.Id, trackingNo) > 0 {
+				log.Printf("[INFO] Update heart-beat-no to %s for %s", trackingNo, carrierCode)
+			}
+		}()
 	}
 }
 

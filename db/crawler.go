@@ -47,7 +47,7 @@ where ci.carrier_code = ?
 	order by tci.priority limit 1
 	`
 
-	updateCrawlerHeartBeatNo = `update tracking_crawler_info set heart_beat_no = ? where id = ?`
+	updateCrawlerHeartBeatNo = `update tracking_crawler_info set heart_beat_no = ? where id = ? and result_status <> 0`
 )
 
 func QueryCrawlerInfoByCarrierCode(carrierCode string, datePoint time.Time) *CrawlerInfoPo {
@@ -64,8 +64,19 @@ func QueryCrawlerInfoByCarrierCode(carrierCode string, datePoint time.Time) *Cra
 	}
 }
 
-func UpgradeHeartBeatNo(crawlerId int64, trackingNo string) {
-	if _, err := db.Exec(updateCrawlerHeartBeatNo, trackingNo, crawlerId); err != nil {
+// 修改状态为不正常的爬虫的监控运单号。
+// 如果爬虫返回结果为成功，那么用这个成功的运单号去更新当前状态为不正常的爬虫的监控运单号。这样可能自动修复监控不正常的问题。
+// crawlerId 爬虫ID。
+// trackingNo 新的运单号。
+// 成功修改的记录数。**注意！！如果新的运单号等于当前运单号，那么实际不会修改任何记录，返回值是0**
+func UpgradeHeartBeatNo(crawlerId int64, trackingNo string) int {
+	if r, err := db.Exec(updateCrawlerHeartBeatNo, trackingNo, crawlerId); err != nil {
 		panic(err)
+	} else {
+		if c, err := r.RowsAffected(); err != nil {
+			panic(err)
+		} else {
+			return int(c)
+		}
 	}
 }
