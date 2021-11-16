@@ -16,12 +16,6 @@ type RollingFileLoggerWriter struct {
 }
 
 func (fl *RollingFileLoggerWriter) Write(p []byte) (n int, err error) {
-	today := time.Now().Truncate(24 * time.Hour)
-	if today != fl.date {
-		fl.closeFile()
-		fl.date = today
-	}
-
 	if err := fl.ensureFileIsOpened(); err != nil {
 		return 0, err
 	}
@@ -29,20 +23,20 @@ func (fl *RollingFileLoggerWriter) Write(p []byte) (n int, err error) {
 	return fl.file.Write(p)
 }
 
-func (fl *RollingFileLoggerWriter) closeFile() {
-	fl.lock.Lock()
-	defer fl.lock.Unlock()
-
-	if fl.file != nil {
-		fl.file.Sync()
-		fl.file.Close()
-		fl.file = nil
-	}
-}
-
 func (fl *RollingFileLoggerWriter) ensureFileIsOpened() error {
 	fl.lock.Lock()
 	defer fl.lock.Unlock()
+
+	today := time.Now().Truncate(24 * time.Hour)
+	if today != fl.date {
+		if fl.file != nil {
+			fl.file.Sync()
+			fl.file.Close()
+			fl.file = nil
+		}
+
+		fl.date = today
+	}
 
 	if fl.file == nil {
 		fileName := fl.createFileName()
