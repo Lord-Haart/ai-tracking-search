@@ -209,7 +209,16 @@ func loadTrackingResultFromDb(trackingSearchList []*_rpcclient.TrackingSearch) {
 				ts.Events = []*_rpcclient.TrackingEvent{}
 			}
 			ts.AgentCode = _agent.AcSuccess2 // 如果跟踪记录来自于数据库，那么查询代理返回码字段固定为成功，因为该记录必然来自于之前曾经成功的查询。
-			ts.Done = tr.Done
+			ts.Done = false
+			for _, evt := range ts.Events {
+				if evt.State == 3 {
+					// 如果存在已妥投的事件，那么设置妥投时间和妥投地点。
+					ts.Done = true
+					ts.DoneTime = evt.Date
+					ts.DonePlace = evt.Place
+					break
+				}
+			}
 			trackingSearchList[i] = ts
 		}
 	}
