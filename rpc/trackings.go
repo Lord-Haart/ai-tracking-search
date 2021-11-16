@@ -95,7 +95,7 @@ func Trackings(ctx *gin.Context) {
 			// 无法获取新的流水号，处理下一个查询对象。
 			continue
 		} else {
-			trackingSearchList1 = append(trackingSearchList1, &_rpcclient.TrackingSearch{ReqTime: now, Src: _types.SrcUnknown, ClientAddr: clientAddr, SeqNo: seqNo, CarrierCode: req.CarrierCode, Language: req.Language, TrackingNo: order.TrackingNo, Done: false})
+			trackingSearchList1 = append(trackingSearchList1, &_rpcclient.TrackingSearch{ReqTime: now, Src: _types.SrcUnknown, ClientId: req.ClientId, ClientAddr: clientAddr, SeqNo: seqNo, CarrierCode: req.CarrierCode, Language: req.Language, TrackingNo: order.TrackingNo, Done: false})
 		}
 	}
 
@@ -231,11 +231,12 @@ func saveTrackingResultToDb(trackingSearchList []*_rpcclient.TrackingSearch) {
 
 		carrierPo := _db.QueryCarrierByCode(ts.CarrierCode)
 		if carrierPo != nil {
-			if _db.SaveTrackingResultToDb(carrierPo.Id, ts.Language, ts.TrackingNo, eventsJson, now, ts.Done) <= 0 {
+			if _db.SaveTrackingResult(carrierPo.Id, ts.Language, ts.TrackingNo, eventsJson, now, ts.Done) <= 0 {
 				log.Printf("[INFO] Duplicated tracking result(carrier-code=%s, language=%s, tracking-no=%s\n", ts.CarrierCode, ts.Language.String(), ts.TrackingNo)
 				continue
 			}
 
+			_db.DeleteTracking(carrierPo.Id, ts.Language, ts.TrackingNo)
 			trackingId := _db.SaveTrackingToDb(carrierPo.Id, ts.Language, ts.TrackingNo, ts.DoneTime, ts.DonePlace, ts.Src, ts.AgentName, now, ts.Done)
 			for _, event := range ts.Events {
 				_db.SaveTrackingDetailToDb(trackingId, event.Date, event.Place, event.Details, event.State, now)
@@ -293,7 +294,7 @@ func saveLogToDb(trackingSearchList []*_rpcclient.TrackingSearch) {
 			carrierId = carrierPo.Id
 			countryId = carrierPo.CountryId
 		}
-		_db.SaveTrackingLogToDb(carrierId, ts.TrackingNo, matchType, countryId, int(timing), ts.ClientAddr, resultStatus, now, ts.Src, now, operator,
+		_db.SaveTrackingLog(ts.ClientId, carrierId, ts.TrackingNo, matchType, countryId, int(timing), ts.ClientAddr, resultStatus, now, ts.Src, now, operator,
 			ts.ReqTime, ts.AgentStartTime, ts.AgentEndTime, ts.AgentRawText, resultNote)
 	}
 }

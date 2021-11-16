@@ -17,6 +17,8 @@ const (
 
 	insertTrackingDetail string = `insert into tracking_detail(info_id, date, place, details, state, event_id, event_name, event_rule_match, status, create_time, update_time)
 	values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	deleteTracking string = `delete from tracking where carrier_id = ? and language = ? and tracking_no = ?`
 )
 
 func SaveTrackingToDb(carrierId int64, language _types.LangId, trackingNo string, deliveryTime time.Time, destination string, collectorType _types.TrackingResultSrc, collectorRealName string, datePoint time.Time, done bool) int64 {
@@ -41,6 +43,18 @@ func SaveTrackingDetailToDb(infoId int64, date time.Time, place string, details 
 			panic(err)
 		} else {
 			return lastRowId
+		}
+	}
+}
+
+func DeleteTracking(carrierId int64, language _types.LangId, trackingNo string) int64 {
+	if result, err := db.Exec(deleteTracking, carrierId, int(language), trackingNo); err != nil {
+		panic(err)
+	} else {
+		if c, err := result.RowsAffected(); err != nil {
+			panic(err)
+		} else {
+			return c
 		}
 	}
 }

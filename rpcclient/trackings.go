@@ -28,6 +28,7 @@ const (
 // 表示针对一个运单的查询，同时包含查询条件和查询结果。
 type TrackingSearch struct {
 	Src            _types.TrackingResultSrc // 来源。可以是 DB或者API或者CRAWLER
+	ClientId       string                   // 客户端ID。
 	ClientAddr     string                   // 客户端IP地址。
 	ReqTime        time.Time                // 客户端发来请求的时间。
 	SeqNo          string                   // 查询流水号。
@@ -111,8 +112,8 @@ func PushTrackingSearchToQueue(priority _types.Priority, trackingSearchList []*T
 		// 查询对象保存到缓存。
 		key := trackingSearchKeyPrefix + "$" + ts.SeqNo
 
-		// 如果20秒内该查询对象尚未被查询代理执行则放弃。
-		if err := _cache.SetAndExpire(key, map[string]interface{}{"reqTime": _utils.AsString(ts.ReqTime), "carrierCode": ts.CarrierCode, "language": ts.Language.String(), "trackingNo": ts.TrackingNo, "postcode": ts.Postcode, "dest": ts.Dest, "date": ts.Date, "clientAddr": ts.ClientAddr, "status": -1}, 60*time.Second); err != nil {
+		// 如果120秒内该查询对象尚未被查询代理执行则放弃。
+		if err := _cache.SetAndExpire(key, map[string]interface{}{"reqTime": _utils.AsString(ts.ReqTime), "clientId": ts.ClientId, "carrierCode": ts.CarrierCode, "language": ts.Language.String(), "trackingNo": ts.TrackingNo, "postcode": ts.Postcode, "dest": ts.Dest, "date": ts.Date, "clientAddr": ts.ClientAddr, "status": -1}, 120*time.Second); err != nil {
 			panic(err)
 		}
 
@@ -138,7 +139,7 @@ func PullTrackingSearchFromCache(priority _types.Priority, keys []string) ([]*Tr
 		// 收集已完成的响应。
 		pc := 0
 		for _, key := range keys {
-			if os, err := _cache.Get(key, "status", "reqTime", "carrierCode", "language", "trackingNo", "clientAddr", "agentSrc", "agentErr", "agentResult", "agentName", "agentStartTime", "agentEndTime"); err != nil {
+			if os, err := _cache.Get(key, "status", "reqTime", "clientId", "carrierCode", "language", "trackingNo", "clientAddr", "agentSrc", "agentErr", "agentResult", "agentName", "agentStartTime", "agentEndTime"); err != nil {
 				if errors.Is(err, redis.Nil) {
 					// 缓存已消失，说明查询超时。
 					continue
@@ -158,16 +159,17 @@ func PullTrackingSearchFromCache(priority _types.Priority, keys []string) ([]*Tr
 				_cache.Del(key)
 
 				reqTime := _utils.AsTime(os[1])
-				carrierCode := _utils.AsString(os[2])
-				language, _ := _types.ParseLangId(_utils.AsString(os[3]))
-				trackingNo := _utils.AsString(os[4])
-				clientAddr := _utils.AsString(os[5])
-				agentSrc := _types.TrackingResultSrc(_utils.AsInt(os[6], int(_types.SrcUnknown)))
-				agentErr := _utils.AsString(os[7])
-				agentRspJson := strings.TrimSpace(_utils.AsString(os[8]))
-				agentName := _utils.AsString(os[9])
-				agentStartTime := _utils.AsTime(os[10])
-				agentEndTime := _utils.AsTime(os[11])
+				clientId := _utils.AsString(os[2])
+				carrierCode := _utils.AsString(os[3])
+				language, _ := _types.ParseLangId(_utils.AsString(os[4]))
+				trackingNo := _utils.AsString(os[5])
+				clientAddr := _utils.AsString(os[6])
+				agentSrc := _types.TrackingResultSrc(_utils.AsInt(os[7], int(_types.SrcUnknown)))
+				agentErr := _utils.AsString(os[8])
+				agentRspJson := strings.TrimSpace(_utils.AsString(os[9]))
+				agentName := _utils.AsString(os[10])
+				agentStartTime := _utils.AsTime(os[11])
+				agentEndTime := _utils.AsTime(os[12])
 
 				trackingResult := _agent.TrackingResult{Code: _agent.AcTimeout}
 				agentCode := _agent.AcTimeout
@@ -224,6 +226,7 @@ func PullTrackingSearchFromCache(priority _types.Priority, keys []string) ([]*Tr
 				trackingSearch := TrackingSearch{
 					SeqNo:          key[len(trackingSearchKeyPrefix)+1:],
 					ReqTime:        reqTime,
+					ClientId:       clientId,
 					Src:            agentSrc,
 					CarrierCode:    carrierCode,
 					Language:       language,
@@ -257,10 +260,12 @@ func PullTrackingSearchFromCache(priority _types.Priority, keys []string) ([]*Tr
 		// } else if c <= 5 {
 		// 	time.Sleep(time.Second * 2)
 		// } else if c <= 7 {
-		if c <= 7 {
+		if c == 1 {
 			time.Sleep(time.Millisecond * 500)
-		} else {
+		} else if c <= 10 {
 			time.Sleep(time.Millisecond * 300)
+		} else {
+			time.Sleep(time.Millisecond * 200)
 		}
 	}
 
